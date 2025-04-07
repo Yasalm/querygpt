@@ -17,31 +17,38 @@ class IndexConfig(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    engine: str
+    engine: str = Field(description="The engine of the database")
 
 
 class PostgresDatabaseConfig(DatabaseConfig):
-    user: str
-    password: str
-    host: str
-    port: int
-    dbname: str
-    schema_query_path: str
+    user: str = Field(description="The user of the database")
+    password: str = Field(description="The password of the database")
+    host: str = Field(description="The host of the database")
+    port: int = Field(description="The port of the database")
+    dbname: str = Field(description="The name of the database")
+    schema_query_path: str = Field(description="The path to the schema query file")
 
 
 class DuckDBDatabaseConfig(DatabaseConfig):
-    path: str
+    path: str = Field(description="The path to the DuckDB database file")
 
 
 class SourceConfig(BaseModel):
-    name: str
-    database: DatabaseConfig
+    name: str = Field(description="The name of the source")
+    database: DatabaseConfig = Field(description="The configuration of the database of the source")
+
+class ChatCompletionConfig(BaseModel):
+    model: str = Field(description="The model of the chat completion")
+    provider: str = Field(description="The provider of the chat completion")
+    remote: bool = Field(description="Whether the chat completion is remote")
+    temperature: float = Field(description="The temperature of the chat completion")
 
 
 class Config(BaseModel):
-    index: IndexConfig
-    sources: List[SourceConfig]
-    internal_db: DuckDBDatabaseConfig
+    index: IndexConfig = Field(description="The configuration of the index")    
+    sources: List[SourceConfig] = Field(description="The list of sources")
+    internal_db: DuckDBDatabaseConfig = Field(description="The configuration of the internal database")
+    llm: ChatCompletionConfig = Field(description="The configuration of the chat completion")
 
 
 def init_config():

@@ -2,9 +2,9 @@ index:
   name: generated_documentation_v0
   url: http://localhost:6333
   embedding_model:
-    name: BAAI/llm-embedder
+    name: paraphrase-multilingual-mpnet-base-v2
     dimensions: 768
-    provider: hf
+    provider: sf
 sources:
   default:
     engine: postgres
@@ -17,3 +17,8 @@ sources:
 internal_db:
   engine: duckdb
   path: /_internal/database.duckdb
+llm:
+  model: gemini
+  provider: gemini/gemini-2.0-flash
+  remote: true
+  temperature: 0.4

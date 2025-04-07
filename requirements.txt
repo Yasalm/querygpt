@@ -8,3 +8,6 @@ python-dotenv
 fastapi
 uvicorn
 pandas
+sentence-transformers
+litellm
+
