@@ -13,6 +13,7 @@ sources:
     host: ${env:POSTGRES_HOST}
     port: ${env:POSTGRES_PORT}
     dbname: ${env:POSTGRES_DATABASE}
+    schema_query_path: /core/sql/postgres.sql
 internal_db:
   engine: duckdb
   path: /_internal/database.duckdb

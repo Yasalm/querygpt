@@ -7,3 +7,4 @@ duckdb
 python-dotenv
 fastapi
 uvicorn
+pandas

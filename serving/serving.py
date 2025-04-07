@@ -13,6 +13,4 @@ config = init_config()
 internal_db = init_database_from_config(config.internal_db)
 source_dbs = [init_database_from_config(source.database) for source in config.sources]
 if __name__ == "__main__":
-    print(internal_db)
-    print(source_dbs)
-    print(config.sources)
+    print(source_dbs[0].get_all_tables_schema())

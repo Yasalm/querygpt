@@ -26,6 +26,7 @@ class PostgresDatabaseConfig(DatabaseConfig):
     host: str
     port: int
     dbname: str
+    schema_query_path: str
 
 
 class DuckDBDatabaseConfig(DatabaseConfig):
