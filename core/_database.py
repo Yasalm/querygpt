@@ -182,7 +182,9 @@ class InternalDatabase(DuckDBDatabase):
                         documentation["possible_usages"],
                     ),
                 ).fetchone()
+            
             table_id = table_id[0]
+            
             for column in documentation["columns_summary"]:
                 column_id = conn.execute(
                     """
@@ -192,43 +194,42 @@ class InternalDatabase(DuckDBDatabase):
                     (table_id, column["column_name"]),
             ).fetchone()
 
-            if column_id:
-                conn.execute(
-                    """
-                    UPDATE column_metadata 
-                    SET column_details_summary = ?, 
-                        bussines_summary = ?, 
-                        possible_usages = ?, 
-                        tags = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        column["column_details_summary"],
-                        column["bussines_summary"],
-                        column["possible_usages"],
-                        json.dumps(column["tags"]),
-                        column_id[0],
-                    ),
-                )
-                return column_id[0]
-            else:
-                column_id = conn.execute(
-                    """
-                    INSERT INTO column_metadata 
-                    (table_id, column_name, column_details_summary, bussines_summary, possible_usages, tags)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    RETURNING id
-                    """,
-                    (
-                        table_id,
-                        column["column_name"],
-                        column["column_details_summary"],
-                        column["bussines_summary"],
-                        column["possible_usages"],
-                        json.dumps(column["tags"]),
-                    ),
-                ).fetchone()
-                return column_id[0]
+                if column_id:
+                    conn.execute(
+                        """
+                        UPDATE column_metadata 
+                        SET column_details_summary = ?, 
+                            bussines_summary = ?, 
+                            possible_usages = ?, 
+                            tags = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            column["column_details_summary"],
+                            column["bussines_summary"],
+                            column["possible_usages"],
+                            json.dumps(column["tags"]),
+                            column_id[0],
+                        ),
+                    )
+                else:
+                    column_id = conn.execute(
+                        """
+                        INSERT INTO column_metadata 
+                        (table_id, column_name, column_details_summary, bussines_summary, possible_usages, tags)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        RETURNING id
+                        """,
+                        (
+                            table_id,
+                            column["column_name"],
+                            column["column_details_summary"],
+                            column["bussines_summary"],
+                            column["possible_usages"],
+                            json.dumps(column["tags"]),
+                        ),
+                    ).fetchone()
+        return table_id
 DATABASE_REGISTRY = {
     DatabaseEngine.POSTGRES.value: PostgresDatabase,
     DatabaseEngine.DUCKDB.value: DuckDBDatabase,
