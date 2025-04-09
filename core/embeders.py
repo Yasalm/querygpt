@@ -8,7 +8,7 @@ class EmbedderBase:
         self.provider = config.provider
     def load_model_from_provider(self):
         raise NotImplementedError
-    def embed(self, text: str):
+    def embed(self, text: List[str]):
         raise NotImplementedError
     def get_embedding_dimensions(self):
         raise NotImplementedError

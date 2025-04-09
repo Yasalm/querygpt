@@ -31,7 +31,7 @@ class PostgresDatabaseConfig(DatabaseConfig):
 
 class DuckDBDatabaseConfig(DatabaseConfig):
     path: str = Field(description="The path to the DuckDB database file")
-
+    ddl_query_path: str = Field(description="The path to the ddl query file")
 
 class SourceConfig(BaseModel):
     name: str = Field(description="The name of the source")

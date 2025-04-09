@@ -17,8 +17,9 @@ sources:
 internal_db:
   engine: duckdb
   path: /_internal/database.duckdb
+  ddl_query_path: /core/sql/_internal_schema.sql
 llm:
-  model: gemini
-  provider: gemini/gemini-2.0-flash
+  provider: gemini
+  model: gemini/gemini-2.0-flash
   remote: true
   temperature: 0.4

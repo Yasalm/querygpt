@@ -16,7 +16,7 @@ class Index:
             self.client.get_collection(self.index)
         except Exception as e:
             self.create()
-        self.embedder = Embedder(**self.config.embedding_model)
+        self.embedder = Embedder(self.config.embedding_model)
 
     def create(self, index: str = None):
         index = index or self.index
