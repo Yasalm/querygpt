@@ -60,7 +60,8 @@ def init_config():
     load_dotenv()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=UserWarning)
-        OmegaConf.register_resolver("env", lambda key: os.environ.get(key))
+        if not OmegaConf.has_resolver("env"):
+            OmegaConf.register_resolver("env", lambda key: os.environ.get(key))
 
     config = OmegaConf.load("config/config.yaml")
 
@@ -81,7 +82,7 @@ def init_config():
 
             source_config["database"] = db_obj
 
-        sources_list.append(SourceConfig(**source_config))
+            sources_list.append(SourceConfig(**source_config))
 
         resolved_config["sources"] = sources_list
 

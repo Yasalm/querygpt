@@ -6,9 +6,12 @@ from core.index import Index
 import json
 import pandas as pd
 from collections import defaultdict
+from tqdm import tqdm
+
 
 def init_internal_database_from_config(config: DatabaseConfig):
     return InternalDatabase(config)
+
 
 def init_database_from_config(config: DatabaseConfig):
     assert (
@@ -32,7 +35,9 @@ def chat_completion_from_config(
     else:
         raise NotImplementedError("Local LLM is not supported yet")
 
+
 # must be identical to the one in the internal db schema file
+# have to be refactored: but later
 class _ColumnDocumentation(BaseModel):
     column_name: str
     column_details_summary: str
@@ -48,12 +53,25 @@ class _TableDocumentation(BaseModel):
     columns_summary: list[_ColumnDocumentation]
 
 
+_EMBEDDING_COLUMNS = [
+    "table_bussines_summary",
+    "table_possible_usages",
+    "column_name",
+    "column_details_summary",
+    "bussines_summary",
+    "possible_usages",
+    "tags",
+]
+
+_IDENTIFIER_COLUMNS = ["id", "table_id"]
+
+
 def _generate_documentation(
     table_name: str, columns_data: List[dict], config: ChatCompletionConfig
 ) -> _TableDocumentation:
     new_cols = []
     for col in columns_data:
-        _col = {k: v for k, v in col.items() if k != "foreign_key_table_metadata"}
+        _col = {k: v for k, v in col.items() if k != "foreign_key_table_docs"}
         if col.get("foreign_key_reference"):
             _col["foreign_key_info"] = col.get("foreign_key_reference")
         new_cols.append(_col)
@@ -99,11 +117,51 @@ def _process_tables_schema(tables_schema: pd.DataFrame) -> List[dict]:
             ref_tab, _ = ref.split(".")
             # Find the referenced table information
             ref_table_data = [t for t in tables_dict if t["table_name"] == ref_tab]
-            item["foreign_key_table_metadata"] = ref_table_data
+            item["foreign_key_table_docs"] = ref_table_data
         else:
-            item["foreign_key_table_metadata"] = {}
+            item["foreign_key_table_docs"] = {}
         tables_schema[item["table_name"]].append(item)
     return tables_schema
+
+
+def _process_docs_for_embedding(
+    documenation: pd.DataFrame,
+    embedding_columns: list = _EMBEDDING_COLUMNS,
+    identifier_columns: list = _IDENTIFIER_COLUMNS,
+) -> dict:
+    """documenation is a dataframe generated from `_generate_documentation`"""
+    table_docs = documenation[embedding_columns + identifier_columns].rename(
+        {"id": "column_id"}, axis=1
+    )
+    table_docs["_text"] = table_docs.apply(
+        lambda row:
+        # "<table_summary>" + row["table_bussines_summary"] + "</table_summary>"
+        # + "<table_possible_usages>" + row["table_possible_usages"] + "</table_possible_usages>"
+        "<column_name>"
+        + row["column_name"]
+        + "</column_name>"
+        + "<column_details_summary>"
+        + row["column_details_summary"]
+        + "</column_details_summary>"
+        + "<column_bussines_summary>"
+        + row["bussines_summary"]
+        + "</column_bussines_summary>"
+        + "<column_possible_usages>"
+        + row["possible_usages"]
+        + "</column_possible_usages>",
+        axis=1,
+    )
+    docs = table_docs[["table_id", "column_id", "tags", "_text"]].to_dict(
+        orient="records"
+    )
+    for doc in docs:
+        tags = list(doc["tags"])
+        _tags = "<tags>"
+        for tag in tags:
+            _tags += f"{tag},"
+        _tags += "</tags"
+        doc["_text"] += _tags
+    return docs
 
 
 def init_sources_documentation_from_config(config: Config):
@@ -117,23 +175,25 @@ def init_sources_documentation_from_config(config: Config):
     for source_db in source_dbs:
         tables_schema = source_db.get_all_tables_schema()
         tables_schema = _process_tables_schema(tables_schema)
-        for table_name, columns_data in tables_schema.items():
+        for table_name, columns_data in tqdm(
+            tables_schema.items(),
+            desc="generating and saving documentations...",
+        ):
             documentation = _generate_documentation(
                 table_name, columns_data, config.llm
             )
-            # save to internal db
             internal_db.save_documentation(documentation)
-            # prepare for embedding
-            # generate embedding
-            # save to index with payload as list(list(emebdding:float)), list[payload:dict]
-            break
-        print(type(documentation))
-        # prepare for llm documentation generation
-        # upsert to index
-        # save to internal db
-
-    # loop over sources
-    # get schema
-    # prepare for llm documentation generation
-    # upsert to index
-    # save to internal db
+        # temporary
+        docs = internal_db.get_all_documenations()
+        processed_docs = _process_docs_for_embedding(docs)
+        # generate embedding
+        payloads = [
+            {
+                "column_id": doc["column_id"],
+                "table_id": doc["table_id"],
+            }
+            for doc in processed_docs
+        ]
+        texts = [doc["_text"] for doc in processed_docs]
+        embeddings = index.embedder.embed(texts)  # Also temp :(
+        index.upsert(embeddings=embeddings, payloads=payloads)

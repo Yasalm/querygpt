@@ -36,9 +36,13 @@ class Index:
         index = index or self.index
         if not isinstance(query, list):
             query = [query]
+        query_vector = self.embedder.embed(query)[0].tolist() if hasattr(self.embedder.embed(query)[0], 'tolist') else self.embedder.embed(query)[0]
+    
+        if isinstance(query_vector[0], list):
+            query_vector = query_vector[0]
         hits = self.client.search(
             collection_name=index,
-            query_vector=self.embedder.embed(query),
+            query_vector=query_vector,
             limit=top_k
         )
         results = []

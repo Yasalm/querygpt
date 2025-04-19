@@ -6,7 +6,7 @@ from config.config import DatabaseConfig
 from pathlib import Path
 import os
 import pandas as pd
-from typing import List
+from typing import List, Union
 import json
 
 def resolve_path_from_project(relative_path: str) -> Path:
@@ -51,7 +51,7 @@ class DatabaseBase:
     def get_all_tables_schema(self):
         raise NotImplementedError()
 
-    def get_table_schema(self, table_name: str):
+    def get_table_schema(self, table_name: Union[str, List[str]]):
         raise NotImplementedError()
 
     def get_table_sample_data(self, table_name: str):
@@ -110,9 +110,9 @@ class PostgresDatabase(DatabaseBase):
         query = load_query_from_file(path)
         return self.execute_query(query)
 
-    def get_table_schema(self, table_name: str):
+    def get_table_schema(self, table_name: Union[str, List[str]]):
         all_tables_schema = self.get_all_tables_schema()
-        return all_tables_schema[all_tables_schema["table_name"] == table_name]
+        return all_tables_schema[all_tables_schema["table_name"].isin(table_name)]
 
     def get_table_sample_data(self, table_name: str):
         return self.execute_query("select * from {} limit 10".format(table_name))
@@ -184,7 +184,7 @@ class InternalDatabase(DuckDBDatabase):
                 ).fetchone()
             
             table_id = table_id[0]
-            
+
             for column in documentation["columns_summary"]:
                 column_id = conn.execute(
                     """
@@ -230,6 +230,18 @@ class InternalDatabase(DuckDBDatabase):
                         ),
                     ).fetchone()
         return table_id
+    def get_all_documenations(self, as_dataframe : bool = True):
+        query = """select t.id table_id, t.table_name, t.bussines_summary table_bussines_summary, t.possible_usages table_possible_usages, c.*
+                from column_metadata c, table_metadata t, 
+                where t.id = c.table_id"""
+        return self.execute_query(query, as_dataframe)
+    def get_documenation(self, table_ids : List[int], column_ids: List[int], as_dataframe : bool = True):
+        query = f"""select t.id table_id, t.table_name, t.bussines_summary table_bussines_summary, t.possible_usages table_possible_usages, c.*
+                from column_metadata c, table_metadata t, 
+                where c.id in {tuple(column_ids)} and c.table_id in {tuple(table_ids)}
+                and t.id = c.table_id"""
+        return self.execute_query(query, as_dataframe)
+
 DATABASE_REGISTRY = {
     DatabaseEngine.POSTGRES.value: PostgresDatabase,
     DatabaseEngine.DUCKDB.value: DuckDBDatabase,
