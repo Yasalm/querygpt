@@ -39,6 +39,8 @@ model = LiteLLMModel(
 
 #     def forward(self, question: str) -> str:
 #         return f"{question}...Thinkinig" * 15
+
+
 class SqlRunner(Tool):
     name = "sql_validator_and_runner"
     description = "validate and run the generated sql code"
@@ -60,7 +62,7 @@ class SqlRunner(Tool):
     
 class ContextRetriever(Tool):
     name = "context_retiver"
-    description = "getting context (table and columns documentation and schema) from a natural language query"
+    description = "getting context (table and columns documentation and schema) from a natural language query in the database"
     inputs = {
         "query": {
             "type": "string",
@@ -74,11 +76,11 @@ class ContextRetriever(Tool):
 class GenerateSqlTool(Tool):
     name = "sql_generator"
     description = """generate sql code from context, context is schema of tables, columns, and documentations, documentations is a data 
-    dictionary covering the usage of these tables and columns"""
+    dictionary covering the usage of these tables and columns in the source database"""
     inputs = {
         "query": {
             "type": "string",
-            "description": "the natural language query asked by user"
+            "description": "the natural language query asked by user, can not be a SQL Query"
         },
         "context": {
             "type": "array",
@@ -116,12 +118,12 @@ class GenerateSqlTool(Tool):
 agent = CodeAgent(
     model=model,
     tools=[ContextRetriever(), GenerateSqlTool(), SqlRunner()],
-    additional_authorized_imports=['unicodedata', 'itertools', 'random', 'stat', 're', 
-'datetime', 'statistics', 'collections', 'math', 'time', 'queue'], planning_interval=5
+    additional_authorized_imports=['unicodedata', 'itertools', 'stat', 're', 
+'datetime', 'statistics', 'collections', 'math', 'time', 'queue', 'json'], planning_interval=5
 )
 
 if __name__ == "__main__":
-    query = "who are most valuable customer"
+    query = "List all films with a rental duration less than 7 days."
     response = agent.run(query)
     print(response)
 
