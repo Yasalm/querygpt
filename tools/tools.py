@@ -40,6 +40,14 @@ model = LiteLLMModel(
 #     def forward(self, question: str) -> str:
 #         return f"{question}...Thinkinig" * 15
 
+class DatabaseTool(Tool):
+    name = "database_table_listing"
+    description = "get all tables an in a database"
+    inputs = {}
+    output_type = "string"
+    def forward(self,):
+        tables = source_db.list_all_tables()
+        return json.dumps(tables.to_dict(orient="records"))
 
 class SqlRunner(Tool):
     name = "sql_validator_and_runner"
@@ -117,13 +125,13 @@ class GenerateSqlTool(Tool):
 
 agent = CodeAgent(
     model=model,
-    tools=[ContextRetriever(), GenerateSqlTool(), SqlRunner()],
+    tools=[DatabaseTool(), ContextRetriever(), GenerateSqlTool(), SqlRunner()],
     additional_authorized_imports=['unicodedata', 'itertools', 'stat', 're', 
 'datetime', 'statistics', 'collections', 'math', 'time', 'queue', 'json'], planning_interval=5
 )
 
 if __name__ == "__main__":
-    query = "List all films with a rental duration less than 7 days."
+    query = "Which actors have appeared in more than five films?"
     response = agent.run(query)
     print(response)
 
