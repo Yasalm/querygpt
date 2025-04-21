@@ -10,4 +10,4 @@ uvicorn
 pandas
 sentence-transformers
 litellm
-
+smolagents

@@ -6,9 +6,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
-from core import chat_completion_from_config
-from core.retreivers import get_context
-from core.sql_generator import generate_sql_from_context, validate_and_run_sql
 
 from fastapi import FastAPI
 import uvicorn
@@ -47,8 +44,6 @@ def get_history():
     "/chat",
 )
 def get_chat(query: str):
-    message = {"role": "user", "content": query}
-
     result, error = workflow.generate_insight_with_retry(query=query, retry=5)
     if not error:
         return result
@@ -58,8 +53,9 @@ def get_chat(query: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("serving:app", host="127.0.0.1", port=8000, reload=True)
-#     print(get_context(query=query, index=index, internal_db=internal_db, source=source_dbs[0]))
+    # uvicorn.run("serving:app", host="127.0.0.1", port=8000, reload=True)
+
+    print(get_context(query="who is the most valuabe customer", index=index, internal_db=internal_db, source=source_dbs[0]))
 #     # internal_db = init_internal_database_from_config(config.internal_db)
 #     # print(internal_db.execute_query("SELECT * FROM table_metadata"))
 #     # print(internal_db.execute_query("SELECT count(*) FROM column_metadata"))
