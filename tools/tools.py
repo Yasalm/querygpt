@@ -4,10 +4,10 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pydantic import BaseModel
-from smolagents import CodeAgent, Tool, LiteLLMModel, DuckDuckGoSearchTool
+from smolagents import CodeAgent, Tool, LiteLLMModel, DuckDuckGoSearchTool, FinalAnswerTool
 from core.sql_generator import generate_sql_from_context, validate_and_run_sql
 from core.retreivers import get_context
-from typing import List
+from typing import List, Any
 from config.config import init_config
 from core.index import Index
 from core import (
@@ -78,6 +78,13 @@ class TableSchemaTool(Tool):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+class FinalAnswerToolOverwrite(FinalAnswerTool):
+    def forward(self, answer: Any) -> Any:
+        final_answer = super().forward(answer)
+        return json.dumps({
+            "final_answer": final_answer,
+            "version": "v.0"
+        })
 
 class TableSampleTool(Tool):
     name = "get_table_data_samples"
