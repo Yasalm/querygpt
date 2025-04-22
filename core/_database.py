@@ -95,15 +95,21 @@ class PostgresDatabase(DatabaseBase):
 
     def list_all_columns(
         self,
-        table_name: str,
+        table_name: str = None,
         exclude_system_schemas: List[str] = ["information_schema", "pg_catalog"],
     ):
-        return self.execute_query(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND table_schema NOT IN ({})".format(
-                table_name,
-                ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
+        if table_name:
+            return self.execute_query(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND table_schema NOT IN ({})".format(
+                    table_name,
+                    ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
+                )
             )
-        )
+        return self.execute_query(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema NOT IN ({})".format(
+                    ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
+                )
+            )
 
     def get_all_tables_schema(self):
         path = resolve_path_from_project(self.config.schema_query_path)
