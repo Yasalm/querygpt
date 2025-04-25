@@ -5,6 +5,40 @@ from config.config import ChatCompletionConfig
 from core._database import DatabaseBase
 from core.index import Index
 import json
+import pandas as pd
+
+
+
+def generate_insight(query: str, sql_result, config: ChatCompletionConfig):
+        if isinstance(sql_result, pd.DataFrame):
+             sql_result = sql_result.to_dict(orient="records")
+        prompt = f"""
+        You are a data analyst. A user asked the following question:
+
+        "{query}"
+
+        You wrote a SQL query, and here is the result table:
+
+        {sql_result}
+
+        Now, analyze the result and summarize the key insights clearly and concisely. Focus on trends, patterns, anomalies, or top contributors. Use plain English suitable for a business decision-maker. If applicable, suggest one actionable takeaway.
+        """
+        messages= [
+                    {
+                        "role": "system",
+                        "content": f"You are a data analyst expert.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+        
+        response = chat_completion_from_config(
+                messages=messages,
+                config=config,
+            )
+        return {
+            "insight": response.choices[0].message.content
+        }
+
 
 class GeneratorWorkflow:
     def __init__(
@@ -19,34 +53,7 @@ class GeneratorWorkflow:
         self.index = index
         self.config = config
 
-    def _generate_insight(self, query: str, sql_result):
-        prompt = f"""
-        You are a data analyst. A user asked the following question:
-
-        "{query}"
-
-        You wrote a SQL query, and here is the result table:
-
-        {sql_result.to_dict(orient="records")}
-
-        Now, analyze the result and summarize the key insights clearly and concisely. Focus on trends, patterns, anomalies, or top contributors. Use plain English suitable for a business decision-maker. If applicable, suggest one actionable takeaway.
-        """
-        messages= [
-                    {
-                        "role": "system",
-                        "content": f"You are a data analyst expert.",
-                    },
-                    {"role": "user", "content": prompt},
-                ]
-        
-        response = chat_completion_from_config(
-                messages=messages,
-                config=self.config,
-            )
-        return {
-            "insight": response.choices[0].message.content
-        }
-
+    
     def generate_insight_with_retry(self, query: str, retry: int = 3):
         context = get_context(
             query=query,
@@ -61,12 +68,13 @@ class GeneratorWorkflow:
         for attempt in range(retry):
             result, error = validate_and_run_sql(raw_sql, self.source_db)
             if not error:
-                insight = self._generate_insight(query, result)
+                insight = generate_insight(query, result, self.config)
                 return {**insight, **generated_sql,
                         "sql_result": result.to_dict(orient="records") 
                         #"context": context # commented this one because there is a bug that failed to parse nans in json api respone.
                         }, None
             if attempt < retry - 1:
+                print(error)
                 retry_prompt = (
                     f"The following SQL query was generated:\n\n{raw_sql}\n\n"
                     f"But it produced this error:\n\n{error}\n\n"
