@@ -5,7 +5,6 @@ An AI agent in your terminal that can connect to databases and generate insights
 ## Getting Started
 
 ### Prerequisites
-- Docker installed on your system
 - Python 3.7 or higher
 - API key for Google Gemini (currently the only supported LLM)
 
