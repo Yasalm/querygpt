@@ -37,7 +37,8 @@ def query(query):
         insight = generate_insight(
             query=query, sql_result=sql_result, config=config.llm
         )
-    response = {"agent_answer": final_answer.to_string(), **sql_gen, **insight}
+    final_answer = final_answer.to_string() if hasattr(final_answer, "to_string") else final_answer
+    response = {"agent_answer": final_answer, **sql_gen, **insight}
     if sql_result and isinstance(sql_result, list):
         if len(sql_result) >= 10:
             response["sql_result_sample"] = sql_result[:10]

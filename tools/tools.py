@@ -4,7 +4,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pydantic import BaseModel
-from smolagents import CodeAgent, Tool, LiteLLMModel, DuckDuckGoSearchTool, FinalAnswerTool
+from smolagents import CodeAgent, Tool, LiteLLMModel, DuckDuckGoSearchTool, FinalAnswerTool, UserInputTool
 from core.sql_generator import generate_sql_from_context, validate_and_run_sql
 from core.retreivers import get_context
 from typing import List, Any
@@ -85,6 +85,13 @@ class FinalAnswerToolOverwrite(FinalAnswerTool):
             "final_answer": final_answer,
             "version": "v.0"
         })
+    
+class UserInputToolOverwrite(UserInputTool):
+    description = "Verify the tables, columns used with the user before running the SQL generated"
+    def forward(self, question):
+        user_input = input(f"{question} => ")
+        return user_input
+    
 
 class TableSampleTool(Tool):
     name = "get_table_data_samples"
@@ -237,7 +244,7 @@ class GenerateSqlTool(Tool):
 
     def forward(self, query: str, context: List[dict]):
         respone = generate_sql_from_context(
-            query=query, context=context, config=config.llm
+            query=query, context=context, config=config.llm, database=source_db.engine
         )
         self._final = respone
         return respone["sql"]
