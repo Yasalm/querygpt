@@ -9,6 +9,7 @@ import pandas as pd
 from typing import List, Union
 import json
 
+
 def resolve_path_from_project(relative_path: str) -> Path:
     return Path(__file__).resolve().parent.parent / relative_path.lstrip("/")
 
@@ -21,6 +22,7 @@ def load_query_from_file(query_path: str) -> str:
 class DatabaseEngine(Enum):
     POSTGRES = "postgres"
     DUCKDB = "duckdb"
+    CLICKHOUSE = "clickhouse"
 
 
 class DatabaseBase:
@@ -38,7 +40,7 @@ class DatabaseBase:
     def list_all_tables(self):
         raise NotImplementedError()
 
-    def list_all_columns(self, table_name: str):
+    def list_all_columns(self, *args, **kwargs):
         raise NotImplementedError()
 
     def execute_query(self, query: str, as_dataframe: bool = True):
@@ -106,10 +108,91 @@ class PostgresDatabase(DatabaseBase):
                 )
             )
         return self.execute_query(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema NOT IN ({})".format(
-                    ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
-                )
+            "SELECT column_name FROM information_schema.columns WHERE table_schema NOT IN ({})".format(
+                ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
             )
+        )
+
+    def get_all_tables_schema(self):
+        path = resolve_path_from_project(self.config.schema_query_path)
+        query = load_query_from_file(path)
+        return self.execute_query(query)
+
+    def get_table_schema(self, table_name: Union[str, List[str]]):
+        all_tables_schema = self.get_all_tables_schema()
+        return all_tables_schema[all_tables_schema["table_name"].isin(table_name)]
+
+    def get_table_sample_data(self, table_name: str):
+        return self.execute_query("select * from {} limit 10".format(table_name))
+
+
+class ClickhouseDatabase(DatabaseBase):
+    def __init__(self, config: DatabaseConfig):
+        super().__init__(config)
+
+    @contextmanager
+    def connect(self):
+        from sqlalchemy import create_engine
+        from clickhouse_sqlalchemy import make_session
+
+        engine = create_engine(
+            f"clickhouse://{self.config.user}:{self.config.password}@{self.config.host}/{self.config.dbname}"
+        )
+        session = make_session(engine)
+        try:
+            yield session.bind
+        finally:
+            session.close()
+
+    def list_all_schemas(
+        self,
+        exclude_system_schemas: List[str] = [
+            "system",
+            "information_schema",
+            "INFORMATION_SCHEMA",
+        ],
+    ):
+        return self.execute_query(
+            "select distinct database as table_schemas from system.columns where database not in ({})".format(
+                ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+            )
+        )
+
+    def list_all_tables(
+        self,
+        exclude_system_schemas: List[str] = [
+            "system",
+            "information_schema",
+            "INFORMATION_SCHEMA",
+        ],
+    ):
+        return self.execute_query(
+            "select distinct table AS table_name from system.columns where database not in ({})".format(
+                ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+            )
+        )
+
+    def list_all_columns(
+        self,
+        table_name : str = None, 
+        exclude_system_schemas: List[str] = [
+            "system",
+            "information_schema",
+            "INFORMATION_SCHEMA",
+        ],
+    ):
+        if table_name:
+            return self.execute_query(
+            "select distinct name AS column_name from system.columns where table = {} database not in ({})".format(
+                table_name,
+                ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+            )
+        )
+        return self.execute_query(
+            "select distinct name AS column_name from system.columns where database not in ({})".format(
+                ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+            )
+        )
 
     def get_all_tables_schema(self):
         path = resolve_path_from_project(self.config.schema_query_path)
@@ -127,6 +210,7 @@ class PostgresDatabase(DatabaseBase):
 class DuckDBDatabase(DatabaseBase):
     def __init__(self, config: DatabaseConfig):
         super().__init__(config)
+
     @contextmanager
     def connect(self):
         path = resolve_path_from_project(self.config.path)
@@ -142,16 +226,16 @@ class InternalDatabase(DuckDBDatabase):
     def __init__(self, config: DatabaseConfig):
         super().__init__(config)
         self.__post_init__()
-    
+
     def __post_init__(self):
-       # post init is to do checks on interal ddl scheam
-       try:
-           path = resolve_path_from_project(self.config.ddl_query_path)
-           ddl_script = load_query_from_file(path)
-           with self.connect() as conn:
-               conn.execute(ddl_script)
-       except Exception as e:
-           raise e
+        # post init is to do checks on interal ddl scheam
+        try:
+            path = resolve_path_from_project(self.config.ddl_query_path)
+            ddl_script = load_query_from_file(path)
+            with self.connect() as conn:
+                conn.execute(ddl_script)
+        except Exception as e:
+            raise e
 
     def save_documentation(self, documentation):
         documentation = documentation.model_dump()
@@ -188,7 +272,7 @@ class InternalDatabase(DuckDBDatabase):
                         documentation["possible_usages"],
                     ),
                 ).fetchone()
-            
+
             table_id = table_id[0]
 
             for column in documentation["columns_summary"]:
@@ -198,7 +282,7 @@ class InternalDatabase(DuckDBDatabase):
                 WHERE table_id = ? AND column_name = ?
                 """,
                     (table_id, column["column_name"]),
-            ).fetchone()
+                ).fetchone()
 
                 if column_id:
                     conn.execute(
@@ -236,19 +320,25 @@ class InternalDatabase(DuckDBDatabase):
                         ),
                     ).fetchone()
         return table_id
-    def get_all_documenations(self, as_dataframe : bool = True):
+
+    def get_all_documenations(self, as_dataframe: bool = True):
         query = """select t.id table_id, t.table_name, t.bussines_summary table_bussines_summary, t.possible_usages table_possible_usages, c.*
                 from column_metadata c, table_metadata t, 
                 where t.id = c.table_id"""
         return self.execute_query(query, as_dataframe)
-    def get_documenation(self, table_ids : List[int], column_ids: List[int], as_dataframe : bool = True):
+
+    def get_documenation(
+        self, table_ids: List[int], column_ids: List[int], as_dataframe: bool = True
+    ):
         query = f"""select t.id table_id, t.table_name, t.bussines_summary table_bussines_summary, t.possible_usages table_possible_usages, c.*
                 from column_metadata c, table_metadata t, 
                 where c.id in {tuple(column_ids)} and c.table_id in {tuple(table_ids)}
                 and t.id = c.table_id"""
         return self.execute_query(query, as_dataframe)
 
+
 DATABASE_REGISTRY = {
     DatabaseEngine.POSTGRES.value: PostgresDatabase,
     DatabaseEngine.DUCKDB.value: DuckDBDatabase,
+    DatabaseEngine.CLICKHOUSE.value: ClickhouseDatabase
 }

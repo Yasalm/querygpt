@@ -28,6 +28,13 @@ class PostgresDatabaseConfig(DatabaseConfig):
     dbname: str = Field(description="The name of the database")
     schema_query_path: str = Field(description="The path to the schema query file")
 
+class ClickhouseDatabaseConfig(DatabaseConfig):
+    user: str = Field(description="The user of the database")
+    password: str = Field(description="The password of the database")
+    host: str = Field(description="The host of the database")
+    port: int = Field(description="The port of the database")
+    dbname: str = Field(description="The name of the database")
+    schema_query_path: str = Field(description="The path to the schema query file")
 
 class DuckDBDatabaseConfig(DatabaseConfig):
     path: str = Field(description="The path to the DuckDB database file")
@@ -77,6 +84,8 @@ def init_config():
                 db_obj = PostgresDatabaseConfig(**source_config)
             elif engine == "duckdb":
                 db_obj = DuckDBDatabaseConfig(**source_config)
+            elif engine == "clickhouse":
+                db_obj = ClickhouseDatabaseConfig(**source_config)
             else:
                 raise ValueError(f"Unknown engine: {engine}")
 
