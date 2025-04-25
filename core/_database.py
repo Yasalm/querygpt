@@ -34,29 +34,29 @@ class DatabaseBase:
     def connect(self):
         raise NotImplementedError()
 
-    def list_all_schemas(self):
+    def list_all_schemas(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def list_all_tables(self):
+    def list_all_tables(self, *args, **kwargs):
         raise NotImplementedError()
 
     def list_all_columns(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def execute_query(self, query: str, as_dataframe: bool = True):
+    def execute_query(self, query: str, as_dataframe: bool = True, ):
         with self.connect() as conn:
             if as_dataframe:
                 return pd.read_sql_query(query, conn)
             else:
                 return conn.execute(query)
 
-    def get_all_tables_schema(self):
+    def get_all_tables_schema(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def get_table_schema(self, table_name: Union[str, List[str]]):
+    def get_table_schema(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def get_table_sample_data(self, table_name: str):
+    def get_table_sample_data(self, *args, **kwargs):
         raise NotImplementedError()
 
 
@@ -119,8 +119,9 @@ class PostgresDatabase(DatabaseBase):
         return self.execute_query(query)
 
     def get_table_schema(self, table_name: Union[str, List[str]]):
+        table_names = [table_name] if isinstance(table_name, str) else table_name
         all_tables_schema = self.get_all_tables_schema()
-        return all_tables_schema[all_tables_schema["table_name"].isin(table_name)]
+        return all_tables_schema[all_tables_schema["table_name"].isin(table_names)]
 
     def get_table_sample_data(self, table_name: str):
         return self.execute_query("select * from {} limit 10".format(table_name))
@@ -167,13 +168,14 @@ class ClickhouseDatabase(DatabaseBase):
         ],
     ):
         return self.execute_query(
-            "select distinct table AS table_name from system.columns where database not in ({})".format(
+            "select distinct database as table_schemas, table AS table_name from system.columns where database not in ({})".format(
                 ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
             )
         )
 
     def list_all_columns(
         self,
+        table_schema: str = None,
         table_name : str = None, 
         exclude_system_schemas: List[str] = [
             "system",
@@ -181,10 +183,11 @@ class ClickhouseDatabase(DatabaseBase):
             "INFORMATION_SCHEMA",
         ],
     ):
-        if table_name:
+        if table_name and table_schema:
+            table = f'{table_schema}.{table_name}'
             return self.execute_query(
-            "select distinct name AS column_name from system.columns where table = {} database not in ({})".format(
-                table_name,
+            "select distinct table AS table_name, name AS column_name from system.columns where table = {} database not in ({})".format(
+                table,
                 ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
             )
         )
@@ -200,11 +203,14 @@ class ClickhouseDatabase(DatabaseBase):
         return self.execute_query(query)
 
     def get_table_schema(self, table_name: Union[str, List[str]]):
+        table_names = [table_name] if isinstance(table_name, str) else table_name
         all_tables_schema = self.get_all_tables_schema()
-        return all_tables_schema[all_tables_schema["table_name"].isin(table_name)]
+        return all_tables_schema[all_tables_schema["table_name"].isin(table_names)]
 
-    def get_table_sample_data(self, table_name: str):
-        return self.execute_query("select * from {} limit 10".format(table_name))
+    def get_table_sample_data(self, table_schema: str, table_name: str):
+        if table_name and table_schema:
+            table = f'{table_schema}.{table_name}'
+        return self.execute_query("select * from {} limit 10".format(table))
 
 
 class DuckDBDatabase(DatabaseBase):

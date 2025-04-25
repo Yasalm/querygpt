@@ -44,6 +44,11 @@ class ColumnListerTool(Tool):
     name = "get_columns"
     description = "this tool allows you to get all columns an in a database in a database either in the all columns or to a specifc table_name"
     inputs = {
+        "table_schema": {
+            "type": "string",
+            "description": "schema or database of where the table is stored",
+            "nullable": True
+        },
         "table_name": {
             "type": "string",
             "description": "table name that you want fetch all its column details",
@@ -52,9 +57,9 @@ class ColumnListerTool(Tool):
     }
     output_type = "string"
 
-    def forward(self, table_name: str = None):
+    def forward(self, table_schema: str = None, table_name: str = None):
         try:
-            tables = source_db.list_all_columns(table_name)
+            tables = source_db.list_all_columns(table_schema, table_name)
             return json.dumps(tables.to_dict(orient="records"))
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -97,6 +102,10 @@ class TableSampleTool(Tool):
     name = "get_table_data_samples"
     description = "this tool allows you to get samples of data from a table"
     inputs = {
+        "table_schema": {
+            "type": "string",
+            "description": "schema or database of where the table is stored"
+        },
         "table_name": {
             "type": "string",
             "description": "table name that you want fetch sample of its data",
@@ -104,9 +113,12 @@ class TableSampleTool(Tool):
     }
     output_type = "string"
 
-    def forward(self, table_name: str):
+    def forward(self, table_schema: str, table_name: str):
         try:
-            samples = source_db.get_table_sample_data(table_name)
+            samples = source_db.get_table_sample_data(table_schema, table_name)
+            # quick-fix: to handle timestamp be json serilazble :(
+            for col in samples.select_dtypes(include=['datetime']).columns:
+                samples[col] = samples[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
             return json.dumps(samples.to_dict(orient="records"))
         except Exception as e:
             return json.dumps({"error": str(e)})
