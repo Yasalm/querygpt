@@ -62,7 +62,7 @@ class GeneratorWorkflow:
             source=self.source_db,
         )
         generated_sql = generate_sql_from_context(
-            query=query, context=context, config=self.config
+            query=query, context=context, config=self.config, database=self.source_db.engine
         )
         raw_sql = generated_sql["sql"]
         for attempt in range(retry):
@@ -81,7 +81,7 @@ class GeneratorWorkflow:
                     f"Please correct and regenerate a valid SQL query for the original request:\n\n{query}"
                 )
                 generated_sql = generate_sql_from_context(
-                    query=retry_prompt, context=context, config=self.config
+                    query=retry_prompt, context=context, config=self.config, database=self.source_db.engine
                 )
                 raw_sql = generated_sql["sql"]
             else:

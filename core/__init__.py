@@ -69,12 +69,16 @@ _IDENTIFIER_COLUMNS = ["id", "table_id"]
 def _generate_documentation(
     table_name: str, columns_data: List[dict], config: ChatCompletionConfig
 ) -> _TableDocumentation:
-    new_cols = []
-    for col in columns_data:
-        _col = {k: v for k, v in col.items() if k != "foreign_key_table_docs"}
-        if col.get("foreign_key_reference"):
-            _col["foreign_key_info"] = col.get("foreign_key_reference")
-        new_cols.append(_col)
+    try:
+        # quick fix: for clickhouse do not have this type of infrommation, as it does not enforec foregins relationships
+        new_cols = []
+        for col in columns_data:
+            _col = {k: v for k, v in col.items() if k != "foreign_key_table_docs"}
+            if col.get("foreign_key_reference"):
+                _col["foreign_key_info"] = col.get("foreign_key_reference")
+            new_cols.append(_col)
+    except:
+        new_cols = columns_data
 
     prompt = f"""
         I need comprehensive documentation for a database table named '{table_name}' with the following columns:
@@ -108,18 +112,19 @@ def _generate_documentation(
         raise e
 
 
-def _process_tables_schema(tables_schema: pd.DataFrame) -> List[dict]:
+def _process_tables_schema(tables_schema: pd.DataFrame, engine: str) -> List[dict]:
     tables_dict = tables_schema.to_dict(orient="records")
     tables_schema = defaultdict(list)
     for item in tables_dict:
-        ref = item["foreign_key_reference"]
-        if ref is not None:
-            ref_tab, _ = ref.split(".")
-            # Find the referenced table information
-            ref_table_data = [t for t in tables_dict if t["table_name"] == ref_tab]
-            item["foreign_key_table_docs"] = ref_table_data
-        else:
-            item["foreign_key_table_docs"] = {}
+        if engine != 'clickhouse':
+            ref = item["foreign_key_reference"]
+            if ref is not None:
+                ref_tab, _ = ref.split(".")
+                # Find the referenced table information
+                ref_table_data = [t for t in tables_dict if t["table_name"] == ref_tab]
+                item["foreign_key_table_docs"] = ref_table_data
+            else:
+                item["foreign_key_table_docs"] = {}
         tables_schema[item["table_name"]].append(item)
     return tables_schema
 
@@ -174,7 +179,7 @@ def init_sources_documentation_from_config(config: Config):
     ]
     for source_db in source_dbs:
         tables_schema = source_db.get_all_tables_schema()
-        tables_schema = _process_tables_schema(tables_schema)
+        tables_schema = _process_tables_schema(tables_schema, source_db.engine)
         for table_name, columns_data in tqdm(
             tables_schema.items(),
             desc="generating and saving documentations...",

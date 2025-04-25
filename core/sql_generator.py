@@ -12,7 +12,7 @@ class SQLModel(BaseModel):
     relevant_sources_from_context: str
 
 
-def generate_sql_from_context(query: str, context: List[dict], config: ChatCompletionConfig):
+def generate_sql_from_context(query: str, context: List[dict], database : str, config: ChatCompletionConfig):
         # quick fix for numpy array, should be fixed in the source
         context = [item.tolist() if isinstance(item, np.ndarray) else item for item in context]
         prompt = f"""
@@ -21,12 +21,12 @@ def generate_sql_from_context(query: str, context: List[dict], config: ChatCompl
         CONTEXT:
         {context}
 
-        DATABASE: postgress
+        DATABASE: {database}
 
         INSTRUCTIONS:
         1. Generate a SQL query that answers the following question: "{query}"
         2. Use only tables and columns that are mentioned in the CONTEXT section.
-        3. Make sure your query is syntactically correct and follows best practices for postgres.
+        3. Make sure your query is syntactically correct and follows best practices for {database}.
         4. Include appropriate JOINs when querying across multiple tables.
         5. Add comments to explain your reasoning for complex parts of the query.
         6. If the question cannot be answered with the available tables/columns, explain why.
@@ -45,7 +45,7 @@ def generate_sql_from_context(query: str, context: List[dict], config: ChatCompl
         messages= [
                     {
                         "role": "system",
-                        "content": f"You are a postgress database expert.",
+                        "content": f"You are a {database} database expert.",
                     },
                     {"role": "user", "content": prompt},
                 ]
