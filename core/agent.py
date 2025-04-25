@@ -48,6 +48,7 @@ agent = CodeAgent(
         "json",
     ],
     planning_interval=5,
+    max_steps=35
 )
 
 if __name__ == "__main__":

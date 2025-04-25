@@ -97,13 +97,16 @@ class PostgresDatabase(DatabaseBase):
 
     def list_all_columns(
         self,
+        table_schema : str = None,
         table_name: str = None,
         exclude_system_schemas: List[str] = ["information_schema", "pg_catalog"],
     ):
         if table_name:
+            # table = f'{table_schema}.{table_name}'
+            table = table_name
             return self.execute_query(
                 "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND table_schema NOT IN ({})".format(
-                    table_name,
+                    table,
                     ", ".join(f"'{schema}'" for schema in exclude_system_schemas),
                 )
             )
@@ -123,8 +126,11 @@ class PostgresDatabase(DatabaseBase):
         all_tables_schema = self.get_all_tables_schema()
         return all_tables_schema[all_tables_schema["table_name"].isin(table_names)]
 
-    def get_table_sample_data(self, table_name: str):
-        return self.execute_query("select * from {} limit 10".format(table_name))
+    def get_table_sample_data(self, table_schema: str, table_name: str):
+        if table_name and table_schema:
+            table = f'{table_schema}.{table_name}'
+            return self.execute_query("select * from {} limit 10".format(table))
+        return ValueError(f"both table_schema: {table_schema}, and table_name {table_name} cannot be null")
 
 
 class ClickhouseDatabase(DatabaseBase):

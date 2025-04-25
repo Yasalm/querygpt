@@ -2,3 +2,9 @@
 .env
 /pagila
 /_internal
+/clickhouse
+/ui
+__pycache__
+.DS_Store
+build
+*.egg*
