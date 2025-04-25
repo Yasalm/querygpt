@@ -1,53 +1,78 @@
 import sys
 import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+import click
 from rich.console import Console
 from rich.markdown import Markdown
-import click
 from core.agent import agent
 from core.workflow import generate_insight
 from config.config import init_config
+from core import init_sources_documentation_from_config
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 console = Console()
 config = init_config()
 
+#TODO: ADD OPTION to select source names or all ( config has name for each source)
+@click.group()
+def cli():
+    """Main entry point for querygpt."""
+    pass
 
-@click.command()
-@click.option(
-    "--query",
-    prompt="Your query to the agent",
-    help="The question that you would like the agent to answer.",
-)
+@cli.command()
+def generate():
+    """generate the sources documentation and other necessary setup."""
+    console.print("Generating documentation from database sources...", style="bold green")
+    try:
+        init_sources_documentation_from_config(config=config)
+        console.print("Generating complete. You can now use `query` to interact with the agent.", style="bold green")
+    except Exception as e:
+        console.print(f"Generating failed. encountered the following error {str(e)}.", style="bold red")
+
+
+@cli.command()
+@click.argument('query')
 def query(query):
-    final_answer = agent.run(query)
-    if final_answer and hasattr(agent.tools["validate_sql_and_exceute_it"], "_final"):
-        sql_result = agent.tools["validate_sql_and_exceute_it"]._final
-    if final_answer and hasattr(agent.tools["sql_generator"], "_final"):
-        sql_gen = agent.tools["sql_generator"]._final
+    """Ask the agent to answer the query."""
+    try:
+        final_answer = agent.run(query)
+        sql_result = None
+        sql_gen = None
+        insight = None
 
-    if final_answer and hasattr(
-        agent.tools["generate_insghits_from_sql_result"], "_final"
-    ):
-        insight = agent.tools["generate_insghits_from_sql_result"]._final
-    if sql_gen and not hasattr(
-        agent.tools["generate_insghits_from_sql_result"], "_final"
-    ):
-        insight = generate_insight(
-            query=query, sql_result=sql_result, config=config.llm
-        )
-    final_answer = final_answer.to_string() if hasattr(final_answer, "to_string") else final_answer
-    response = {"agent_answer": final_answer, **sql_gen, **insight}
-    if sql_result and isinstance(sql_result, list):
-        if len(sql_result) >= 10:
-            response["sql_result_sample"] = sql_result[:10]
-        else:
-            response["sql_result"] = sql_result
-    markdown = Markdown(insight["insight"])
-    console.print(markdown, justify="left",)
-    console.print(response, justify="left")
+        if final_answer and hasattr(agent.tools["validate_sql_and_exceute_it"], "_final"):
+            sql_result = agent.tools["validate_sql_and_exceute_it"]._final
+
+        if final_answer and hasattr(agent.tools["sql_generator"], "_final"):
+            sql_gen = agent.tools["sql_generator"]._final
+
+        if final_answer and hasattr(agent.tools["generate_insghits_from_sql_result"], "_final"):
+            insight = agent.tools["generate_insghits_from_sql_result"]._final
+
+        if sql_gen and not insight:
+            insight = generate_insight(
+                query=query, sql_result=sql_result, config=config.llm
+            )
+
+        final_answer = final_answer.to_string() if hasattr(final_answer, "to_string") else final_answer
+        
+        response = {"agent_answer": final_answer, **(sql_gen or {}), **(insight or {})}
+
+        if sql_result and isinstance(sql_result, list):
+            if len(sql_result) >= 10:
+                response["sql_result_sample"] = sql_result[:10]
+            else:
+                response["sql_result"] = sql_result
+
+        if insight and "insight" in insight:
+            markdown = Markdown(insight["insight"])
+            console.print(markdown, justify="left")
+        
+        console.print(response, justify="left")
+
+    except Exception as e:
+        console.print(f"Error processing query: {str(e)}", style="bold red")
 
 
 if __name__ == "__main__":
-    query()
+    cli()

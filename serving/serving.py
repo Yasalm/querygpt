@@ -1,3 +1,5 @@
+#WP
+
 import sys
 import os
 
@@ -53,10 +55,20 @@ def get_chat(query: str):
 
 
 if __name__ == "__main__":
-    # uvicorn.run("serving:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("serving:app", host="127.0.0.1", port=8000, reload=True)
+    # source_dbs = [init_database_from_config(source.database) for source in config.sources]
+    # source_db = source_dbs[0]  # TMP: as we only support one source for now.
+    # print(source_db.get_table_sample_data("public", "film_list"))
+    # print(source_db.list_all_columns())
+    # print(source_db.get_all_tables_schema())
+    # print(source_db.engine)
 
-    print(get_context(query="who is the most valuabe customer", index=index, internal_db=internal_db, source=source_dbs[0]))
-#     # internal_db = init_internal_database_from_config(config.internal_db)
-#     # print(internal_db.execute_query("SELECT * FROM table_metadata"))
-#     # print(internal_db.execute_query("SELECT count(*) FROM column_metadata"))
+    # # init_sources_documentation_from_config(config) # this should be moved to a diff script before running the serving api
+
+    # # print(get_context(query="who is the most valuabe customer", index=index, internal_db=internal_db, source=source_dbs[0]))
+    # internal_db = init_internal_database_from_config(config.internal_db)
+    # print(internal_db.execute_query("SELECT * FROM table_metadata"))
+    # print(internal_db.execute_query("SELECT * FROM column_metadata"))
+
+
 #     # print(source_dbs[0].get_table_schema("actor"))

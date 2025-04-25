@@ -11,3 +11,5 @@ pandas
 sentence-transformers
 litellm
 smolagents
+clickhouse-sqlalchemy
+sqlalchemy

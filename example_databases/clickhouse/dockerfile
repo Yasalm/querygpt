@@ -1,0 +1,17 @@
+# Use the official ClickHouse image
+FROM clickhouse/clickhouse-server:latest
+
+# Expose the default ClickHouse ports
+EXPOSE 9000
+EXPOSE 8123
+
+# Set environment variables
+ENV CLICKHOUSE_DB=mydatabase
+ENV CLICKHOUSE_USER=default
+ENV CLICKHOUSE_PASSWORD=yourpassword
+
+# Declare the volume inside the container
+VOLUME ["/var/lib/clickhouse"]
+
+# Start ClickHouse server using the default entrypoint
+CMD ["clickhouse-server", "--config-file", "/etc/clickhouse-server/config.xml"]
