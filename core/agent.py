@@ -2,8 +2,9 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from smolagents import CodeAgent, LiteLLMModel, DuckDuckGoSearchTool
+import yaml
+import importlib
+from smolagents import CodeAgent, LiteLLMModel, DuckDuckGoSearchTool, TransformersModel
 from config.config import init_config
 from tools.tools import (
     TableListerTool,
@@ -14,49 +15,68 @@ from tools.tools import (
     TableSchemaTool,
     TableSampleTool,
     InisghtGeneratorTool,
-    FinalAnswerToolOverwrite,
+    FinderFinalAnswer,
     UserInputToolOverwrite,
 )
 
+
+
 config = init_config()
 
-model = LiteLLMModel(model_id=config.llm.model, temperature=0.7)
+ENGINE = LiteLLMModel(model_id=config.llm.model, temperature=config.llm.temperature)
+# model = TransformersModel(
+#     model_id="Qwen/Qwen3-4B",
+#     device="cuda",
+#     max_new_tokens=5000,
+#       )
+DEFULAT_AUTH_IMPORTS = [
+    "unicodedata",
+    "itertools",
+    "stat",
+    "re",
+    "datetime",
+    "statistics",
+    "collections",
+    "math",
+    "time",
+    "queue",
+    "json",
+]
 
-agent = CodeAgent(
-    model=model,
-    tools=[
-        TableListerTool(),
-        ColumnListerTool(),
-        GenerateSqlTool(),
-        SqlExecutorTool(),
-        ContextRetrieverTool(),
-        TableSchemaTool(),
-        TableSampleTool(),
-        InisghtGeneratorTool(),
-    ],
-    additional_authorized_imports=[
-        "unicodedata",
-        "itertools",
-        "stat",
-        "re",
-        "datetime",
-        "statistics",
-        "collections",
-        "math",
-        "time",
-        "queue",
-        "json",
-    ],
-    planning_interval=5,
-    max_steps=35
-)
+DEFAULT_TOOLS = [
+    TableListerTool(),
+    ColumnListerTool(),
+    GenerateSqlTool(),
+    SqlExecutorTool(),
+    ContextRetrieverTool(),
+    TableSchemaTool(),
+    TableSampleTool(),
+    # InisghtGeneratorTool(),
+]
 
-if __name__ == "__main__":
-    query = "What is the average film length for movies in the Comedy genre?"
-    for step_result in agent.run(query, stream=True):
-        print(type(step_result), dir(step_result))
 
-    sql_result = agent.tools["validate_sql_and_exceute_it"]._final
-    sql_gen = agent.tools["sql_generator"]._final
+def create_agent(
+    task: str = "query",
+    engine=ENGINE,
+    planning_interval: int = 5,
+    additional_authorized_imports: list = DEFULAT_AUTH_IMPORTS,
+    tools: list = DEFAULT_TOOLS,
+):
+    if task == "query":
+        tools += [InisghtGeneratorTool()]
+        custom_prompt_templates = yaml.safe_load(
+            importlib.resources.files("core.prompts").joinpath("query_agent.yaml").read_text()
+        )
+    if task == "finder":
+        custom_prompt_templates = yaml.safe_load(
+            importlib.resources.files("core.prompts").joinpath("finder_agent.yaml").read_text()
+        )
 
-    print({**sql_gen, "sql_result": sql_result})
+    agent = CodeAgent(
+        model=engine,
+        tools=tools,
+        additional_authorized_imports=additional_authorized_imports,
+        planning_interval=planning_interval,
+        prompt_templates=custom_prompt_templates,
+    )
+    return agent
