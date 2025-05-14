@@ -23,6 +23,7 @@ class DatabaseEngine(Enum):
     POSTGRES = "postgres"
     DUCKDB = "duckdb"
     CLICKHOUSE = "clickhouse"
+    ORACLE = "oracle"
 
 
 class DatabaseBase:
@@ -43,7 +44,11 @@ class DatabaseBase:
     def list_all_columns(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def execute_query(self, query: str, as_dataframe: bool = True, ):
+    def execute_query(
+        self,
+        query: str,
+        as_dataframe: bool = True,
+    ):
         with self.connect() as conn:
             if as_dataframe:
                 return pd.read_sql_query(query, conn)
@@ -97,7 +102,7 @@ class PostgresDatabase(DatabaseBase):
 
     def list_all_columns(
         self,
-        table_schema : str = None,
+        table_schema: str = None,
         table_name: str = None,
         exclude_system_schemas: List[str] = ["information_schema", "pg_catalog"],
     ):
@@ -128,9 +133,140 @@ class PostgresDatabase(DatabaseBase):
 
     def get_table_sample_data(self, table_schema: str, table_name: str):
         if table_name and table_schema:
-            table = f'{table_schema}.{table_name}'
+            table = f"{table_schema}.{table_name}"
             return self.execute_query("select * from {} limit 10".format(table))
-        return ValueError(f"both table_schema: {table_schema}, and table_name {table_name} cannot be null")
+        return ValueError(
+            f"both table_schema: {table_schema}, and table_name {table_name} cannot be null"
+        )
+
+
+class OracleDatabase(DatabaseBase):
+    def __init__(self, config: DatabaseConfig):
+        super().__init__(config)
+
+    @contextmanager
+    def connect(self):
+        from oracledb import connect
+
+        conn_params = {
+            k: v
+            for k, v in vars(self.config).items()
+            if k != "engine" and v is not None and k != "schema_query_path"
+        }
+        conn = connect(**conn_params)
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def list_all_schemas(
+        self,
+        exclude_system_schemas: List[str] = [
+            "SYS",
+            "SYSTEM",
+            "C##DBA_YAA",
+            "CTXSYS",
+            "DBSNMP",
+            "DVSYS",
+            "GSMADMIN_INTERNAL",
+            "LBACSYS",
+            "MDSYS",
+            "OLAPSYS",
+            "ORDDATA",
+            "ORDSYS",
+            "OUTLN",
+            "WMSYS",
+            "XDB",
+        ],
+    ):
+        return self.execute_query(
+            "SELECT username as schema_name FROM all_users WHERE username in ('FRAUD_USR', 'COLL_USR')"
+        )
+
+    def list_all_tables(
+        self,
+        exclude_system_schemas: List[str] = [
+            "SYS",
+            "SYSTEM",
+            "C##DBA_YAA",
+            "CTXSYS",
+            "DBSNMP",
+            "DVSYS",
+            "GSMADMIN_INTERNAL",
+            "LBACSYS",
+            "MDSYS",
+            "OLAPSYS",
+            "ORDDATA",
+            "ORDSYS",
+            "OUTLN",
+            "WMSYS",
+            "XDB",
+        ],
+    ):
+        return self.execute_query(
+            """SELECT owner as schema_name,
+       table_name
+FROM   all_tables     
+where owner in  ('FRAUD_USR', 'COLL_USR')   
+ORDER  BY owner, table_name 
+            """
+        )
+
+    def list_all_columns(
+        self,
+        table_schema: str = None,
+        table_name: str = None,
+        exclude_system_schemas: List[str] = ["information_schema", "pg_catalog"],
+    ):
+        if table_name:
+            # table = f'{table_schema}.{table_name}'
+            table = table_name
+            return self.execute_query(
+                """SELECT owner schema_name,
+                        table_name,
+                        column_name,
+                        data_type,
+                        data_length,
+                        data_precision,
+                        data_scale,
+                        nullable
+                    FROM   all_tab_columns
+                    where table table_name = '{}'        
+                    ORDER  BY owner, table_name, column_id
+                """.format(
+                    table
+                )
+            )
+        return self.execute_query(
+            """SELECT owner schema_name,
+                        table_name,
+                        column_name,
+                        data_type,
+                        data_length,
+                        data_precision,
+                        data_scale,
+                        nullable
+                    FROM   all_tab_columns
+                    ORDER  BY owner, table_name, column_id"""
+        )
+
+    def get_all_tables_schema(self):
+        path = resolve_path_from_project(self.config.schema_query_path)
+        query = load_query_from_file(path)
+        return self.execute_query(query)
+
+    def get_table_schema(self, table_name: Union[str, List[str]]):
+        table_names = [table_name] if isinstance(table_name, str) else table_name
+        all_tables_schema = self.get_all_tables_schema()
+        return all_tables_schema[all_tables_schema["TABLE_NAME"].isin(table_names)]
+
+    def get_table_sample_data(self, table_schema: str, table_name: str):
+        if table_name and table_schema:
+            table = f"{table_schema}.{table_name}"
+            return self.execute_query("select * from {} where rownum <= 10".format(table))
+        return ValueError(
+            f"both table_schema: {table_schema}, and table_name {table_name} cannot be null"
+        )
 
 
 class ClickhouseDatabase(DatabaseBase):
@@ -139,8 +275,11 @@ class ClickhouseDatabase(DatabaseBase):
 
     @contextmanager
     def connect(self):
-        from sqlalchemy import create_engine
-        from clickhouse_sqlalchemy import make_session
+        try:
+            from sqlalchemy import create_engine
+            from clickhouse_sqlalchemy import make_session
+        except Exception as e:
+            raise ValueError("Please install clickhouse-driver, clickhouse_sqlalchemy")
 
         engine = create_engine(
             f"clickhouse://{self.config.user}:{self.config.password}@{self.config.host}/{self.config.dbname}"
@@ -182,7 +321,7 @@ class ClickhouseDatabase(DatabaseBase):
     def list_all_columns(
         self,
         table_schema: str = None,
-        table_name : str = None, 
+        table_name: str = None,
         exclude_system_schemas: List[str] = [
             "system",
             "information_schema",
@@ -190,13 +329,12 @@ class ClickhouseDatabase(DatabaseBase):
         ],
     ):
         if table_name and table_schema:
-            table = f'{table_schema}.{table_name}'
+            table = f"{table_schema}.{table_name}"
             return self.execute_query(
-            "select distinct table AS table_name, name AS column_name from system.columns where table = {} database not in ({})".format(
-                table,
-                ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+                "select distinct table AS table_name, name AS column_name from system.columns where table = {} database not in ({})".format(
+                    table, ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
+                )
             )
-        )
         return self.execute_query(
             "select distinct name AS column_name from system.columns where database not in ({})".format(
                 ", ".join(f"'{schema}'" for schema in exclude_system_schemas)
@@ -215,7 +353,7 @@ class ClickhouseDatabase(DatabaseBase):
 
     def get_table_sample_data(self, table_schema: str, table_name: str):
         if table_name and table_schema:
-            table = f'{table_schema}.{table_name}'
+            table = f"{table_schema}.{table_name}"
         return self.execute_query("select * from {} limit 10".format(table))
 
 
@@ -352,5 +490,6 @@ class InternalDatabase(DuckDBDatabase):
 DATABASE_REGISTRY = {
     DatabaseEngine.POSTGRES.value: PostgresDatabase,
     DatabaseEngine.DUCKDB.value: DuckDBDatabase,
-    DatabaseEngine.CLICKHOUSE.value: ClickhouseDatabase
+    DatabaseEngine.CLICKHOUSE.value: ClickhouseDatabase,
+    DatabaseEngine.ORACLE.value: OracleDatabase,
 }

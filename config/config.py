@@ -36,6 +36,12 @@ class ClickhouseDatabaseConfig(DatabaseConfig):
     dbname: str = Field(description="The name of the database")
     schema_query_path: str = Field(description="The path to the schema query file")
 
+class OracleDatabaseConfig(DatabaseConfig):
+    user: str = Field(description="The user of the database")
+    password: str = Field(description="The password of the database")
+    dsn: str = Field(description="DSN of the database, host,port")
+    schema_query_path: str = Field(description="The path to the schema query file")
+
 class DuckDBDatabaseConfig(DatabaseConfig):
     path: str = Field(description="The path to the DuckDB database file")
     ddl_query_path: str = Field(description="The path to the ddl query file")
@@ -86,6 +92,8 @@ def init_config():
                 db_obj = DuckDBDatabaseConfig(**source_config)
             elif engine == "clickhouse":
                 db_obj = ClickhouseDatabaseConfig(**source_config)
+            elif engine == "oracle":
+                db_obj = OracleDatabaseConfig(**source_config)
             else:
                 raise ValueError(f"Unknown engine: {engine}")
 
