@@ -83,12 +83,32 @@ class TableSchemaTool(Tool):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-class FinalAnswerToolOverwrite(FinalAnswerTool):
-    def forward(self, answer: Any) -> Any:
-        final_answer = super().forward(answer)
+class FinderFinalAnswer(FinalAnswerTool):
+    description = "Provides a final answer to the given problem."
+    inputs = {
+        "sql": {
+            "type": "string", 
+            "description": "SQL that answer the given problem"
+            }, 
+        "tables": {
+            "type": "string",
+            "description": "SQL tables in databases needed to answer the given problem"
+            },
+        "columns": {
+            "type": "string",
+            "description": "SQL columns in databases needed to answer the given problem"
+            },
+        "operations": {
+            "type": "string",
+            "description": "Any SQL operation that is needed to be done on tables and columns to answer the given problem"
+            }
+        }
+    def forward(self, sql: str, tables, columns, operations) -> Any:
         return json.dumps({
-            "final_answer": final_answer,
-            "version": "v.0"
+            "sql": sql,
+            "tables": tables,
+            "columns": columns,
+            "operations": operations
         })
     
 class UserInputToolOverwrite(UserInputTool):
@@ -191,6 +211,8 @@ class SqlExecutorTool(Tool):
     def forward(self, sql: str):
         result, error = validate_and_run_sql(sql=sql, database=source_db)
         if not error:
+            for col in result.select_dtypes(include=['datetime']).columns:
+                result[col] = result[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
             result = result.to_dict(orient="records")
             self._final = result
             return json.dumps(result)
