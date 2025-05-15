@@ -3,6 +3,45 @@ from qdrant_client import QdrantClient
 from config.config import IndexConfig
 from core.embeders import Embedder
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from typing import List
+import uuid
+import chromadb
+from core.embeders import Embedder
+from config.config import IndexConfig
+
+
+class ChromaIndex:
+    def __init__(self, config: IndexConfig):
+        self.config = config
+        self.client = chromadb.PersistentClient(config.url)
+        self.collection = self.client.get_or_create_collection(
+            name=config.name,
+            metadata={"hnsw:space": "cosine"})
+        self.embedder = Embedder(config.embedding_model)
+ 
+    def upsert(self,
+               embeddings: List[List[float]],
+               payloads:   List[dict]):
+        ids = [str(uuid.uuid4()) for _ in embeddings]  
+        self.collection.upsert(
+            ids=ids,
+            embeddings=embeddings,
+            metadatas=payloads)
+ 
+    def retrieve(self, query: str, top_k: int = 10):
+        if not isinstance(query, list):
+            query = [query]
+        vector = self.embedder.embed(query)[0]
+        res = self.collection.query(
+            query_embeddings=[vector],
+            n_results=top_k)
+        distances = res["distances"][0]
+        metadatas = res["metadatas"][0]
+        results = [
+            {"score": 1 - d, "metadata": m}
+            for d, m in zip(distances, metadatas)
+        ]
+        return results
 
 class Index:
     def __init__(self, config: IndexConfig):
@@ -53,3 +92,8 @@ class Index:
             }
             results.append(metadata)
         return results
+
+def get_index(config: IndexConfig):
+    if config.local:
+        return ChromaIndex(config)
+    return Index(config)

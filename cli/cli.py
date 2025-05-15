@@ -1,5 +1,8 @@
 import sys
 import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import click
 from rich.console import Console
 from rich.markdown import Markdown
@@ -10,7 +13,7 @@ from core import init_sources_documentation_from_config
 from rich.syntax import Syntax
 import json
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 console = Console()
 config = init_config()

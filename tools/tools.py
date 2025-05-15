@@ -9,7 +9,7 @@ from core.sql_generator import generate_sql_from_context, validate_and_run_sql
 from core.retreivers import get_context
 from typing import List, Any
 from config.config import init_config
-from core.index import Index
+from core.index import get_index
 from core import (
     init_database_from_config,
     init_internal_database_from_config,
@@ -24,7 +24,7 @@ config = init_config()
 source_dbs = [init_database_from_config(source.database) for source in config.sources]
 source_db = source_dbs[0]  # TMP: as we only support one source for now.
 internal_db = init_internal_database_from_config(config.internal_db)
-index = Index(config.index)
+index = get_index(config.index)
 
 
 class TableListerTool(Tool):

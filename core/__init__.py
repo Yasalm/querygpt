@@ -2,7 +2,7 @@ from core._database import DATABASE_REGISTRY, DatabaseConfig, InternalDatabase
 from config.config import ChatCompletionConfig, Config
 from pydantic import BaseModel
 from typing import List
-from core.index import Index
+from core.index import get_index
 import json
 import pandas as pd
 from collections import defaultdict
@@ -24,14 +24,32 @@ def chat_completion_from_config(
     messages: List[str], config: ChatCompletionConfig, response_format: BaseModel = None
 ):
     if config.remote:
-        from litellm import completion
+        if config.base_url:
+            import httpx
+            from openai import OpenAI
+            from openai.lib._parsing._completions import type_to_response_format_param
+            http_client = httpx.Client(trust_env=False)
+            client = OpenAI(base_url=config.base_url, api_key="adsfdsa", http_client=http_client)
+            # url = f'{config.base_url}/chat/completions'
+            data = {
+                    "model": config.model,
+                    "messages": messages,
+                    "temperature": config.temperature,
+                    }
+            if response_format:
+                data["response_format"] = type_to_response_format_param(response_format)
+            return client.chat.completions.create(**data)
 
-        return completion(
-            messages=messages,
-            model=config.model,
-            temperature=config.temperature,
-            response_format=response_format,
-        )
+
+
+        else:
+            from litellm import completion
+            return completion(
+                messages=messages,
+                model=config.model,
+                temperature=config.temperature,
+                response_format=response_format,
+            )
     else:
         raise NotImplementedError("Local LLM is not supported yet")
 
@@ -171,7 +189,7 @@ def _process_docs_for_embedding(
 
 def init_sources_documentation_from_config(config: Config):
     # create index
-    index = Index(config.index)
+    index = get_index(config.index)
     internal_db = init_internal_database_from_config(config.internal_db)
     # i need to get all schema: Prepare for llm documentation generation
     source_dbs = [

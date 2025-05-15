@@ -1,25 +1,26 @@
 index:
   name: generated_documentation_v0
-  url: http://localhost:6333
+  local: true
+  url: /_internal/index
   embedding_model:
     name: paraphrase-multilingual-mpnet-base-v2
     dimensions: 768
     provider: sf
 sources:
   default:
-    engine: postgres
-    user: ${env:POSTGRES_USER}
-    password: ${env:POSTGRES_PASSWORD}
-    host: ${env:POSTGRES_HOST}
-    port: ${env:POSTGRES_PORT}
+    engine: oracle
+    user: ${env:FRAUD_USR}
+    password: ${env:FRAUD_PASS}
+    dsn: ${env:FRAUD_DSN}
     dbname: ${env:POSTGRES_DATABASE}
-    schema_query_path: /core/sql/postgres.sql
+    schema_query_path: /core/sql/oracle.sql
 internal_db:
   engine: duckdb
   path: /_internal/database.duckdb
   ddl_query_path: /core/sql/_internal_schema.sql
 llm:
-  provider: gemini
-  model: gemini/gemini-2.0-flash
+  provider: openai
+  model: llama-3.3-70B
   remote: true
+  base_url: http://10.235.0.23:8000/v1
   temperature: 0.4

@@ -8,8 +8,10 @@ python-dotenv
 fastapi
 uvicorn
 pandas
+torch
 sentence-transformers
 litellm
 smolagents
-clickhouse-sqlalchemy
+chromadb
+# clickhouse-sqlalchemy
 sqlalchemy

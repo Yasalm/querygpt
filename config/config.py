@@ -14,6 +14,7 @@ class IndexConfig(BaseModel):
         description="The configuration of the embedding model used with this collection"
     )
     url: str = Field(description="The URL of the Qdrant instance")
+    local: bool = Field(description="use local file for stroing index")
 
 
 class DatabaseConfig(BaseModel):
@@ -55,6 +56,7 @@ class ChatCompletionConfig(BaseModel):
     provider: str = Field(description="The provider of the chat completion")
     remote: bool = Field(description="Whether the chat completion is remote")
     temperature: float = Field(description="The temperature of the chat completion")
+    base_url : str | None = Field(description="the base url of LLM model")
 
 
 class Config(BaseModel):
