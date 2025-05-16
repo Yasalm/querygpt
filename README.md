@@ -3,9 +3,11 @@
 An AI agent in your terminal that can connect to databases and generate insights using natural language queries. 
 - It leverage LLM to generate documentation for each table and column and also any foreign relationship, and roleplay as data documenation expert to generate possible bussiness usage of them.
 
+![Database Agent Demo](./misc/demo.gif)
+
 ## Getting Started
 
-### Prerequisites
+### Requirements
 - Python 3.7 or higher
 - API key for Google Gemini (currently the only supported LLM)
 
