@@ -112,15 +112,6 @@ QueryGPT is an agentic system that uses a collection of tools to automatically a
        schema_query_path: /core/sql/postgres.sql
    ```
 
-   **DuckDB Configuration:**
-   ```yaml
-   sources:
-     duckdb_source:
-       engine: duckdb
-       path: ${env:DUCKDB_PATH}
-       ddl_query_path: /core/sql/duckdb.sql
-   ```
-
    You can configure multiple database sources in the same config file.
 
 ### Example Database Setup
@@ -173,8 +164,7 @@ QueryGPT currently suppoert the followingå:
 |----------|--------|--------------|
 | Postgres | ✅ Fully supported | - |
 | Clickhouse | ✅ Fully supported | - |
-| Oracle | 🔄 In development | - |
-| Duckdb | 🔄 In development | - |
+| Oracle | ✅ Fully supported | - |
 | MySQL | 🔄 In development | - |
 
 ## Supported LLM Models
@@ -186,5 +176,4 @@ QueryGPT currently supports Google Gemini with ongoing development to add more p
 | Google | ✅ Fully supported | `GEMINI_API_KEY` |
 | OpenAI | 🔄 In development | Coming soon |
 | Anthropic | 🔄 In development | Coming soon |
-| Meta | 🔄 In development | Coming soon |
 | Local | 🔄 In development | Coming soon |
