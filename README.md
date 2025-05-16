@@ -3,7 +3,8 @@
 An AI agent in your terminal that can connect to databases and generate insights using natural language queries. 
 - It leverage LLM to generate documentation for each table and column and also any foreign relationship, and roleplay as data documenation expert to generate possible bussiness usage of them.
 
-![Database Agent Demo](./misc/demo.gif)
+Check out this [article](https://yasalm.github.io/yasir-s/an-ai-agent-to-interact-with-databases) for techincal deep dive 
+
 
 ## Getting Started
 
