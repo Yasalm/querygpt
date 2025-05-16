@@ -1,9 +1,9 @@
-from core.sql_generator import generate_sql_from_context, validate_and_run_sql
-from core.retreivers import get_context
-from core import chat_completion_from_config
-from config.config import ChatCompletionConfig
-from core._database import DatabaseBase
-from core.index import Index
+from querygpt.core.sql_generator import generate_sql_from_context, validate_and_run_sql
+from querygpt.core.retreivers import get_context
+from querygpt.core import chat_completion_from_config
+from querygpt.config.config import ChatCompletionConfig
+from querygpt.core._database import DatabaseBase
+from querygpt.core.index import Index
 import json
 import pandas as pd
 

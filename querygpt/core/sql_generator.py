@@ -1,10 +1,10 @@
-from core import chat_completion_from_config
+from querygpt.core import chat_completion_from_config
 from typing import List
 import numpy as np
 from pydantic import BaseModel
-from config.config import ChatCompletionConfig
+from querygpt.config.config import ChatCompletionConfig
 import json
-from core._database import DatabaseBase
+from querygpt.core._database import DatabaseBase
 
 class SQLModel(BaseModel):
     sql: str

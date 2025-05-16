@@ -1,12 +1,8 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import yaml
 import importlib
 from smolagents import CodeAgent, LiteLLMModel, DuckDuckGoSearchTool, TransformersModel
-from config.config import init_config
-from tools.tools import (
+from querygpt.config.config import init_config
+from querygpt.tools.tools import (
     TableListerTool,
     ColumnListerTool,
     GenerateSqlTool,

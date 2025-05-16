@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from config.config import EmbeddingModelConfig
+from querygpt.config.config import EmbeddingModelConfig
 
 class EmbedderBase:
     def __init__(self, config: EmbeddingModelConfig):

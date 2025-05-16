@@ -1,13 +1,13 @@
 from typing import List
 from qdrant_client import QdrantClient
-from config.config import IndexConfig
-from core.embeders import Embedder
+from querygpt.config.config import IndexConfig
+from querygpt.core.embeders import Embedder
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from typing import List
 import uuid
 import chromadb
-from core.embeders import Embedder
-from config.config import IndexConfig
+from querygpt.core.embeders import Embedder
+from querygpt.config.config import IndexConfig
 
 
 class ChromaIndex:

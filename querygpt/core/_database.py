@@ -1,13 +1,12 @@
-from psycopg2 import connect
-import duckdb
 from contextlib import contextmanager
 from enum import Enum
-from config.config import DatabaseConfig
+from querygpt.config.config import DatabaseConfig
 from pathlib import Path
 import os
 import pandas as pd
 from typing import List, Union
 import json
+from pathlib import Path
 
 
 def resolve_path_from_project(relative_path: str) -> Path:
@@ -76,6 +75,12 @@ class PostgresDatabase(DatabaseBase):
             for k, v in vars(self.config).items()
             if k != "engine" and v is not None and k != "schema_query_path"
         }
+        try:
+            from psycopg2 import connect
+        except ImportError as e:
+            raise ModuleNotFoundError(
+                "To use Postgres, please install psycopg2 by using 'pip install querygpt[postgres]'"
+            )
         conn = connect(**conn_params)
         try:
             yield conn
@@ -146,7 +151,12 @@ class OracleDatabase(DatabaseBase):
 
     @contextmanager
     def connect(self):
-        from oracledb import connect
+        try:
+            from oracledb import connect
+        except ImportError as e:
+            raise ModuleNotFoundError(
+                "To use Oracle, please install oracledb by using 'pip install querygpt[oracle]'"
+            )
 
         conn_params = {
             k: v
@@ -263,7 +273,9 @@ ORDER  BY owner, table_name
     def get_table_sample_data(self, table_schema: str, table_name: str):
         if table_name and table_schema:
             table = f"{table_schema}.{table_name}"
-            return self.execute_query("select * from {} where rownum <= 10".format(table))
+            return self.execute_query(
+                "select * from {} where rownum <= 10".format(table)
+            )
         return ValueError(
             f"both table_schema: {table_schema}, and table_name {table_name} cannot be null"
         )
@@ -278,8 +290,10 @@ class ClickhouseDatabase(DatabaseBase):
         try:
             from sqlalchemy import create_engine
             from clickhouse_sqlalchemy import make_session
-        except Exception as e:
-            raise ValueError("Please install clickhouse-driver, clickhouse_sqlalchemy")
+        except ImportError  as e:
+            raise ModuleNotFoundError(
+                "To use Clickhouse, please install clickhouse-sqlalchemy and sqlalchemy by using 'pip install querygpt[clickhouse]'"
+            )
 
         engine = create_engine(
             f"clickhouse://{self.config.user}:{self.config.password}@{self.config.host}/{self.config.dbname}"
@@ -363,9 +377,16 @@ class DuckDBDatabase(DatabaseBase):
 
     @contextmanager
     def connect(self):
-        path = resolve_path_from_project(self.config.path)
+        try:
+            from duckdb import connect
+        except ImportError as e:
+            raise ModuleNotFoundError(
+                "To use DuckDB, please install duckdb by using 'pip install querygpt[duckdb]'"
+            )
+        # path = resolve_path_from_project(self.config.path)
+        path = Path(self.config.path)
         os.makedirs(path.parent, exist_ok=True)
-        conn = duckdb.connect(path)
+        conn = connect(path)
         try:
             yield conn
         finally:

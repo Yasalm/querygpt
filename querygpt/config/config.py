@@ -67,18 +67,18 @@ class Config(BaseModel):
 
 
 def init_config():
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv, find_dotenv
     from omegaconf import OmegaConf
     import os
     import warnings
 
-    load_dotenv()
+    load_dotenv(find_dotenv())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=UserWarning)
         if not OmegaConf.has_resolver("env"):
             OmegaConf.register_resolver("env", lambda key: os.environ.get(key))
 
-    config = OmegaConf.load("config/config.yaml")
+    config = OmegaConf.load("querygpt/config/config.yaml")
 
     resolved_config = OmegaConf.to_container(config, resolve=True)
 

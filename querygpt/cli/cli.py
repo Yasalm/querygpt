@@ -1,18 +1,12 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import click
 from rich.console import Console
 from rich.markdown import Markdown
-from core.agent import create_agent
-from core.workflow import generate_insight
-from config.config import init_config
-from core import init_sources_documentation_from_config
+from querygpt.core.agent import create_agent
+from querygpt.core.workflow import generate_insight
+from querygpt.config.config import init_config
+from querygpt.core import init_sources_documentation_from_config
 from rich.syntax import Syntax
 import json
-
 
 
 console = Console()
@@ -20,11 +14,11 @@ config = init_config()
 
 #TODO: ADD OPTION to select source names or all ( config has name for each source)
 @click.group()
-def cli():
-    """Main entry point for querygpt."""
+def main():
+    """cli entry point for querygpt."""
     pass
 
-@cli.command()
+@main.command()
 def generate():
     """generate the sources documentation and other necessary setup."""
     console.print("Generating documentation from database sources...", style="bold green")
@@ -34,7 +28,7 @@ def generate():
     except Exception as e:
         console.print(f"Generating failed. encountered the following error {str(e)}.", style="bold red")
 
-@cli.command()
+@main.command()
 @click.argument('finder')
 def finder(finder):
     """Ask the agent to answer the query."""
@@ -66,7 +60,7 @@ def finder(finder):
     except Exception as e:
         console.print(f"Error processing query: {str(e)}", style="bold red")
 
-@cli.command()
+@main.command()
 @click.argument('query')
 def query(query):
     """Ask the agent to answer the query."""
@@ -115,4 +109,4 @@ def query(query):
 
 
 if __name__ == "__main__":
-    cli()
+    main()

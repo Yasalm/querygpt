@@ -1,13 +1,13 @@
-from core._database import DATABASE_REGISTRY, DatabaseConfig, InternalDatabase
-from config.config import ChatCompletionConfig, Config
+from querygpt.core._database import DATABASE_REGISTRY, DatabaseConfig, InternalDatabase
+from querygpt.config.config import ChatCompletionConfig, Config
 from pydantic import BaseModel
 from typing import List
-from core.index import get_index
+from querygpt.core.index import get_index
 import json
 import pandas as pd
 from collections import defaultdict
 from tqdm import tqdm
-
+from querygpt.core.memory import Memory
 
 def init_internal_database_from_config(config: DatabaseConfig):
     return InternalDatabase(config)
@@ -19,7 +19,7 @@ def init_database_from_config(config: DatabaseConfig):
     ), f"Invalid database engine: {config.engine}, available engines: {DATABASE_REGISTRY.keys()}"
     return DATABASE_REGISTRY[config.engine](config)
 
-
+@Memory()
 def chat_completion_from_config(
     messages: List[str], config: ChatCompletionConfig, response_format: BaseModel = None
 ):

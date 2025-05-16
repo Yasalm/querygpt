@@ -1,5 +1,5 @@
-from core.index import Index
-from core._database import InternalDatabase, DatabaseBase
+from querygpt.core.index import Index
+from querygpt.core._database import InternalDatabase, DatabaseBase
 
 
 def get_context(

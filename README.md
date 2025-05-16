@@ -11,50 +11,117 @@ An AI agent in your terminal that can connect to databases and generate insights
 
 ### Installation
 
-1. Clone the repository:
+   Clone the repository:
    ```bash
    git clone git@github.com:Yasalm/querygpt.git
    cd querygpt
    ```
 
-2. Set up your environment:
    ```bash
-   # Create a virtual environment (optional but recommended)
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # Install Poetry if you don't have it already
+   # On macOS/Linux/WSL:
+   brew install poetry
    
-   # Install the package and dependencies
-   pip install -e .  # This will install all dependencies from requirements.txt
-   
-   # Alternatively, you can install dependencies directly
-   # pip install -r requirements.txt
+   # Install dependencies using Poetry
+   poetry install
    ```
 
-3. Set up environment variables for your database connection and LLM API keys:
+   Optional dependency groups can be installed as needed:
+   
+   | Database Support | Installation Command |
+   |------------------|----------------------|
+   | PostgreSQL       | `poetry install --with postgres` |
+   | ClickHouse       | `poetry install --with clickhouse` |
+   | All Databases    | `poetry install --with all` |
+
+### Running QueryGPT
+
+QueryGPT is an agentic system that uses a collection of tools to automatically analyze your database and answer complex questions without requiring SQL knowledge.
+
+1. Use the CLI commands:
    ```bash
-   # Database connection
-   export DB_USER=postgres
-   export DB_PASSWORD=your_password
-   export DB_HOST=localhost
-   export DB_PORT=5432
-   export DB_NAME=your_database
+   # First, generate documentation from your database sources
+   poetry run querygpt generate
+      -> Generation complete. You can now use `querygpt query` to interact with the agent.
+   
+   # Then run queries in natural language
+   poetry run querygpt query "Analyze the rental patterns across different film categories and identify which categories show seasonal trends, comparing summer vs winter rentals for the past two years"
+      -> {
+         "agent_answer": "...",
+         "sql_result": [
+            {
+               ...
+            }
+         ],
+         ...
+      }
+   ```
+
+2. Start the API server and use it:
+   ```bash
+   # Start the API server
+   python -m serving.serving
+   
+   # Then query the API
+   curl -X POST http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"query": "Find customers who spent more than the average in 2022, break down their spending by film category, and recommend three films they haven't watched based on their preferences"}'
+   ```
+
+### Database Configuration setups:
+
+1. Create a `.env` file in the project root with your database credentials and API keys:
+   ```
+   # Create a .env file with the appropriate variables for your database type
+   # PostgreSQL connection variables
+   DB_USER=postgres
+   DB_PASSWORD=your_password
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=your_database
    
    # LLM API keys
-   export GEMINI_API_KEY=your_gemini_key
+   GEMINI_API_KEY=your_gemini_key
    ```
 
-4. Configure your database connections in `config/config.yaml`:
+   Note: See the configuration examples below for the specific environment variables needed for each database type.
+
+2. Configure your database connections in `config/config.yaml`:
+
+   **PostgreSQL/ClickHouse Configuration:**
    ```yaml
    sources:
-     default:
-       engine: postgres
+     default_source:
+       engine: postgres  # Use 'postgres' or 'clickhouse'
        user: ${env:DB_USER}
        password: ${env:DB_PASSWORD}
        host: ${env:DB_HOST}
        port: ${env:DB_PORT}
        dbname: ${env:DB_NAME}
+       schema_query_path: core/sql/postgres.sql  # Use appropriate SQL path
+   ```
+
+   **Oracle Configuration:**
+   ```yaml
+   sources:
+     oracle_source:
+       engine: oracle
+       user: ${env:ORACLE_USER}
+       password: ${env:ORACLE_PASSWORD}
+       dsn: ${env:ORACLE_HOST}:${env:ORACLE_PORT}/${env:ORACLE_SERVICE}
        schema_query_path: /core/sql/postgres.sql
    ```
+
+   **DuckDB Configuration:**
+   ```yaml
+   sources:
+     duckdb_source:
+       engine: duckdb
+       path: ${env:DUCKDB_PATH}
+       ddl_query_path: /core/sql/duckdb.sql
+   ```
+
+   You can configure multiple database sources in the same config file.
 
 ### Example Database Setup
 
@@ -87,30 +154,6 @@ You can use the Pagila example database (a sample movie rental database) to expe
      port: 5432
      dbname: pagila
      schema_query_path: /core/sql/postgres.sql
-   ```
-
-### Running QueryGPT
-
-QueryGPT is an agentic system that uses a collection of tools to automatically analyze your database and answer complex questions without requiring SQL knowledge.
-
-1. Use the CLI commands:
-   ```bash
-   # First, generate documentation from your database sources
-   querygpt generate
-   
-   # Then run queries in natural language
-   querygpt query "Analyze the rental patterns across different film categories and identify which categories show seasonal trends, comparing summer vs winter rentals for the past two years"
-   ```
-
-2. Start the API server and use it:
-   ```bash
-   # Start the API server
-   python -m serving.serving
-   
-   # Then query the API
-   curl -X POST http://localhost:8000/query \
-     -H "Content-Type: application/json" \
-     -d '{"query": "Find customers who spent more than the average in 2022, break down their spending by film category, and recommend three films they haven't watched based on their preferences"}'
    ```
 
 ## Configuration
