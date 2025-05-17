@@ -29,7 +29,7 @@ def chat_completion_from_config(
             from openai import OpenAI
             from openai.lib._parsing._completions import type_to_response_format_param
             http_client = httpx.Client(trust_env=False)
-            client = OpenAI(base_url=config.base_url, api_key="adsfdsa", http_client=http_client)
+            client = OpenAI(base_url=config.base_url, api_key="", http_client=http_client)
             # url = f'{config.base_url}/chat/completions'
             data = {
                     "model": config.model,
