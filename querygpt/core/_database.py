@@ -7,7 +7,7 @@ import pandas as pd
 from typing import List, Union
 import json
 from pathlib import Path
-
+from querygpt.core.trace import Trace
 
 def resolve_path_from_project(relative_path: str) -> Path:
     return Path(__file__).resolve().parent.parent / relative_path.lstrip("/")
@@ -407,7 +407,58 @@ class InternalDatabase(DuckDBDatabase):
                 conn.execute(ddl_script)
         except Exception as e:
             raise e
-
+        
+    def save_trace(self, trace: Trace):
+        """Save the trace into the database.
+        
+        Args:
+            trace (Trace): The trace to save.
+            
+        Returns:
+            trace_id (int): The id of the trace.
+        """
+        trace = trace.to_dict()
+        try:
+            with self.connect() as conn:
+                trace_id = conn.execute(
+                    "INSERT INTO trace (id, task, enhanced_task, start_time, end_time, duration_seconds, final_answer, system_prompt, total_steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                    (
+                        trace.get("id"),
+                        trace.get("task"),
+                        trace.get("enhanced_task"),
+                        trace.get("start_time"),
+                        trace.get("end_time"),
+                        trace.get("duration_seconds"),
+                        trace.get("final_answer"),
+                        trace.get("system_prompt"),
+                        trace.get("total_steps")
+                    ),
+                ).fetchone()
+                trace_id = trace_id[0]
+                for step in trace["steps"]:
+                    conn.execute(
+                        "INSERT INTO tracestep (id, trace_id, step_number, step_type, start_time, end_time, duration_seconds, model_input, model_output, tool_calls, observations, error, action_output, plan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            step.get("id"),
+                            step.get("trace_id"),
+                            step.get("step_number"),
+                            step.get("step_type"),
+                            step.get("start_time"),
+                            step.get("end_time"),
+                            step.get("duration_seconds"),
+                            step.get("model_input"),
+                            step.get("model_output"),
+                            step.get("tool_calls"),
+                            step.get("observations"),
+                            step.get("error"),
+                            step.get("action_output"),
+                            step.get("plan")
+                        ),
+                    )
+            return trace_id
+        except Exception as e:
+            raise e
+        
     def save_documentation(self, documentation):
         documentation = documentation.model_dump()
         with self.connect() as conn:

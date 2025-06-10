@@ -1,21 +1,23 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pydantic import BaseModel
-from smolagents import CodeAgent, Tool, LiteLLMModel, DuckDuckGoSearchTool, FinalAnswerTool, UserInputTool
-from core.sql_generator import generate_sql_from_context, validate_and_run_sql
-from core.retreivers import get_context
-from typing import List, Any
-from config.config import init_config
-from core.index import get_index
-from core import (
+from smolagents import (
+    CodeAgent,
+    Tool,
+    LiteLLMModel,
+    DuckDuckGoSearchTool,
+    FinalAnswerTool,
+    UserInputTool,
+)
+from querygpt.core.sql_generator import generate_sql_from_context, validate_and_run_sql
+from querygpt.core.retreivers import get_context
+from typing import List, Any, Dict
+from querygpt.config.config import init_config
+from querygpt.core.index import get_index
+from querygpt.core import (
     init_database_from_config,
     init_internal_database_from_config,
     chat_completion_from_config,
 )
-from core.retreivers import get_context
 import json
 
 config = init_config()
@@ -47,13 +49,13 @@ class ColumnListerTool(Tool):
         "table_schema": {
             "type": "string",
             "description": "schema or database of where the table is stored",
-            "nullable": True
+            "nullable": True,
         },
         "table_name": {
             "type": "string",
             "description": "table name that you want fetch all its column details",
             "nullable": True,
-        }
+        },
     }
     output_type = "string"
 
@@ -83,40 +85,40 @@ class TableSchemaTool(Tool):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+
 class FinderFinalAnswer(FinalAnswerTool):
     description = "Provides a final answer to the given problem."
     inputs = {
-        "sql": {
-            "type": "string", 
-            "description": "SQL that answer the given problem"
-            }, 
+        "sql": {"type": "string", "description": "SQL that answer the given problem"},
         "tables": {
             "type": "string",
-            "description": "SQL tables in databases needed to answer the given problem"
-            },
+            "description": "SQL tables in databases needed to answer the given problem",
+        },
         "columns": {
             "type": "string",
-            "description": "SQL columns in databases needed to answer the given problem"
-            },
+            "description": "SQL columns in databases needed to answer the given problem",
+        },
         "operations": {
             "type": "string",
-            "description": "Any SQL operation that is needed to be done on tables and columns to answer the given problem"
-            }
-        }
+            "description": "Any SQL operation that is needed to be done on tables and columns to answer the given problem",
+        },
+    }
+
     def forward(self, sql: str, tables, columns, operations) -> Any:
-        return json.dumps({
-            "sql": sql,
-            "tables": tables,
-            "columns": columns,
-            "operations": operations
-        })
-    
+        return json.dumps(
+            {"sql": sql, "tables": tables, "columns": columns, "operations": operations}
+        )
+
+
 class UserInputToolOverwrite(UserInputTool):
-    description = "Verify the tables, columns used with the user before running the SQL generated"
+    description = (
+        "Verify the tables, columns used with the user before running the SQL generated"
+    )
+
     def forward(self, question):
         user_input = input(f"{question} => ")
         return user_input
-    
+
 
 class TableSampleTool(Tool):
     name = "get_table_data_samples"
@@ -124,12 +126,12 @@ class TableSampleTool(Tool):
     inputs = {
         "table_schema": {
             "type": "string",
-            "description": "schema or database of where the table is stored"
+            "description": "schema or database of where the table is stored",
         },
         "table_name": {
             "type": "string",
             "description": "table name that you want fetch sample of its data",
-        }
+        },
     }
     output_type = "string"
 
@@ -137,8 +139,8 @@ class TableSampleTool(Tool):
         try:
             samples = source_db.get_table_sample_data(table_schema, table_name)
             # quick-fix: to handle timestamp be json serilazble :(
-            for col in samples.select_dtypes(include=['datetime']).columns:
-                samples[col] = samples[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
+            for col in samples.select_dtypes(include=["datetime"]).columns:
+                samples[col] = samples[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
             return json.dumps(samples.to_dict(orient="records"))
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -160,7 +162,6 @@ class InisghtGeneratorTool(Tool):
         },
     }
     output_type = "string"
-    
 
     def forward(self, query: str, sql_result: str):
         try:
@@ -211,8 +212,8 @@ class SqlExecutorTool(Tool):
     def forward(self, sql: str):
         result, error = validate_and_run_sql(sql=sql, database=source_db)
         if not error:
-            for col in result.select_dtypes(include=['datetime']).columns:
-                result[col] = result[col].dt.strftime('%Y-%m-%dT%H:%M:%S')
+            for col in result.select_dtypes(include=["datetime"]).columns:
+                result[col] = result[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
             result = result.to_dict(orient="records")
             self._final = result
             return json.dumps(result)
@@ -242,8 +243,12 @@ class ContextRetrieverTool(Tool):
 
 class GenerateSqlTool(Tool):
     name = "sql_generator"
-    description = """generate sql code from context_retiver output, context most similar related tables and column names and their bussiness and usage documentation. and then joins the retireved 
-    similar table names and columns and query the database to obatin its schema, as in datatypes, constraints. etc"""
+    description = """Generates SQL code based on the context provided by the context_retriever tool. 
+    query: is the natural language question that would be translated into a SQL code.
+    context: is the context provided by the context_retriever tool.
+    instructions: is your instructions for enhancing the SQL query.
+    previous_sql: is the previous SQL query that needs to be modified if applicable.
+    """
     inputs = {
         "query": {
             "type": "string",
@@ -273,15 +278,136 @@ class GenerateSqlTool(Tool):
                 },
             },
         },
+        "instructions": {
+            "type": "string",
+            "description": "Instructions to enhance previous sql query after you ran it and got the result or there is an error. if you have no previous sql query, this is your first try",
+            "nullable": True,
+        },
+        "previous_sql": {
+            "type": "string",
+            "description": "Previous sql query if provided, otherwise this is your first try or it is irrelevant. if you have no previous sql query, this is your first try",
+            "nullable": True,
+        },
     }
     output_type = "string"
 
-    def forward(self, query: str, context: List[dict]):
+    def forward(self, query: str, context: List[dict], instructions: str | None = None, previous_sql: str | None = None):
         respone = generate_sql_from_context(
-            query=query, context=context, config=config.llm, database=source_db.engine
+            query=query, context=context, config=config.llm, database=source_db.engine, instructions=instructions, previous_sql=previous_sql
         )
         self._final = respone
         return respone["sql"]
+
+
+class VisualizationGenerator(Tool):
+    name = "generate_visualization"
+    description = "Generate an HTML visualization (chart/graph) from SQL query results for display in the frontend"
+    inputs = {
+        "query": {
+            "type": "string",
+            "description": "The original natural language query asked by the user",
+        },
+        "sql_result": {
+            "type": "string",
+            "description": "The SQL query results as a JSON string (list of dictionaries)",
+        },
+        "visualization_type": {
+            "type": "string",
+            "description": "Optional visualization type suggestion (bar, line, pie, scatter, etc.)",
+            "nullable": True,
+        },
+    }
+    output_type = "string"
+
+    def forward(self, query: str, sql_result: str, visualization_type: str = None):
+        try:
+            # Parse the SQL result
+            if isinstance(sql_result, str):
+                data = json.loads(sql_result)
+            else:
+                data = sql_result
+
+            # Generate visualization
+            visualization_html = self._generate_visualization(
+                query=query, data=data, visualization_type=visualization_type
+            )
+
+            self._final = {"visualization_html": visualization_html}
+            return json.dumps({"visualization_html": visualization_html})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    def _generate_visualization(
+        self, query: str, data: List[Dict[str, Any]], visualization_type: str = None
+    ):
+        """Generate an HTML visualization based on the data"""
+
+        # Create a prompt for the LLM to generate visualization code
+
+        prompt = f"""
+    You are a senior data visualization expert. A user asked the following question:
+
+    "{query}"
+
+    Here are the SQL query results (first 10 rows shown):
+
+    {json.dumps(data[:10], indent=2)} {'...' if len(data) > 10 else ''}
+
+    Your task is to create a **professional, BI-grade HTML visualization** using **Chart.js (https://www.chartjs.org/)** that effectively communicates this data.
+
+    Requirements:
+    1. Choose the most appropriate chart type to clearly communicate insights (unless specified: {visualization_type if visualization_type else 'you decide'}).
+    2. Use **clean, minimal, executive-style formatting**—as seen in professional BI tools like Power BI, Tableau, or Looker.
+    3. Color scheme must be professional and sophisticated:
+       - Use a darker, muted color palette with rich tones instead of bright high-contrast colors
+       - Prefer deep blues, dark teals, rich purples, charcoal grays, and subtle earth tones
+       - Avoid primary colors (red, bright blue, yellow) and neon/flashy colors
+       - For multiple data series, use colors from the same tonal family that work harmoniously
+       - Ensure sufficient contrast for readability while maintaining a cohesive look
+    4. Chart dimensions and responsiveness:
+       - Set the chart canvas to a width of 800px and height of 500px for proper visibility
+       - Include responsive: true in Chart.js options to handle different screen sizes
+       - Use appropriate margins and padding (at least 20px) around the chart
+       - Ensure the chart container is centered on the page
+       - Include appropriate aspect ratio to prevent distortion
+    5. Include:
+       - A clear **title** and **legend**
+       - Axis labels (if applicable)
+       - Data tooltips for interactivity
+       - Gridlines only if they enhance clarity
+       - Appropriate number formatting (e.g., commas for thousands, currency if relevant)
+    6. The HTML must be:
+       - A **complete, self-contained page**
+       - Load Chart.js from a **CDN**
+       - Ready to render directly in a modern browser
+       - Free of external dependencies
+
+    Your output must be **only the valid HTML code**, with no explanations or Markdown formatting.
+        """
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a data visualization expert specializing in Chart.js. Generate only valid, complete HTML code with no explanations.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        response = chat_completion_from_config(messages=messages, config=config.llm)
+
+        visualization_code = response.choices[0].message.content
+
+        # Extract just the HTML if there's any markdown or explanation text
+        if "```html" in visualization_code:
+            visualization_code = (
+                visualization_code.split("```html")[1].split("```")[0].strip()
+            )
+        elif "```" in visualization_code:
+            visualization_code = (
+                visualization_code.split("```")[1].split("```")[0].strip()
+            )
+
+        return visualization_code
 
 
 # agent = CodeAgent(

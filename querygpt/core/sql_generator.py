@@ -12,7 +12,7 @@ class SQLModel(BaseModel):
     relevant_sources_from_context: str
 
 
-def generate_sql_from_context(query: str, context: List[dict], database : str, config: ChatCompletionConfig):
+def generate_sql_from_context(query: str, context: List[dict], database : str, config: ChatCompletionConfig, instructions: str | None = None, previous_sql: str | None = None):
         # quick fix for numpy array, should be fixed in the source
         context = [item.tolist() if isinstance(item, np.ndarray) else item for item in context]
         prompt = f"""
@@ -30,6 +30,9 @@ def generate_sql_from_context(query: str, context: List[dict], database : str, c
         4. Include appropriate JOINs when querying across multiple tables.
         5. Add comments to explain your reasoning for complex parts of the query.
         6. If the question cannot be answered with the available tables/columns, explain why.
+
+        Previous SQL: {previous_sql} if provided, otherwise this is your first try
+        Instructions to enhance previous sql query: {instructions} if provided, otherwise this is your first try
 
         Your response should be structured as follows:
 

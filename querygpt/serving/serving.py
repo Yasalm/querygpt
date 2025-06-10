@@ -1,32 +1,27 @@
 #WP
-
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
 from fastapi import FastAPI
 import uvicorn
-from config.config import init_config
-from core.index import Index
-from core import (
+from querygpt.config.config import init_config
+from querygpt.core.index import get_index
+from querygpt.core import (
     init_database_from_config,
     init_sources_documentation_from_config,
     init_internal_database_from_config,
 )
-from core.retreivers import get_context
-from core.workflow import GeneratorWorkflow
+from querygpt.core.retreivers import get_context
+from querygpt.core.workflow import GeneratorWorkflow, generate_insight
+from querygpt.core.agent import create_agent
 
 config = init_config()
 # init_sources_documentation_from_config(config) # this should be moved to a diff script before running the serving api
 source_dbs = [init_database_from_config(source.database) for source in config.sources]
 source_db = source_dbs[0]  # TMP: as we only support one source for now.
 internal_db = init_internal_database_from_config(config.internal_db)
-index = Index(config.index)
+index = get_index(config.index)
 
 workflow = GeneratorWorkflow(source_database=source_db, interal_database=internal_db, index=index, config=config.llm)
 
@@ -43,15 +38,39 @@ def get_history():
 
 
 @app.get(
-    "/chat",
+    "/query",
 )
-def get_chat(query: str):
-    result, error = workflow.generate_insight_with_retry(query=query, retry=5)
-    if not error:
-        return result
-    return {
-        "error": error
-    }
+def get_query(query: str):
+    agent = create_agent(task="query")
+    final_answer = agent.run(query)
+    sql_result = None
+    sql_gen = None
+    insight = None
+
+    if final_answer and hasattr(agent.tools["validate_sql_and_exceute_it"], "_final"):
+        sql_result = agent.tools["validate_sql_and_exceute_it"]._final
+
+    if final_answer and hasattr(agent.tools["sql_generator"], "_final"):
+            sql_gen = agent.tools["sql_generator"]._final
+
+    if final_answer and hasattr(agent.tools["generate_insghits_from_sql_result"], "_final"):
+        insight = agent.tools["generate_insghits_from_sql_result"]._final
+
+    if sql_gen and not insight:
+        insight = generate_insight(
+                query=query, sql_result=sql_result, config=config.llm
+            )
+
+    final_answer = final_answer.to_string() if hasattr(final_answer, "to_string") else final_answer
+        
+    response = {"agent_answer": final_answer, **(sql_gen or {}), **(insight or {})}
+
+    if sql_result and isinstance(sql_result, list):
+        if len(sql_result) >= 10:
+            response["sql_result_sample"] = sql_result[:2]
+        else:
+            response["sql_result"] = sql_result
+    return response
 
 
 if __name__ == "__main__":
