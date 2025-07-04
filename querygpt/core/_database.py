@@ -8,14 +8,31 @@ from typing import List, Union
 import json
 from pathlib import Path
 from querygpt.core.trace import Trace
+from querygpt.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def resolve_path_from_project(relative_path: str) -> Path:
-    return Path(__file__).resolve().parent.parent / relative_path.lstrip("/")
+    logger.debug(f"Resolving path: {relative_path}")
+    resolved_path = Path(__file__).resolve().parent.parent / relative_path.lstrip("/")
+    logger.debug(f"Resolved to: {resolved_path}")
+    return resolved_path
 
 
 def load_query_from_file(query_path: str) -> str:
-    with open(query_path, "r") as file:
-        return "".join(file.readlines())
+    logger.debug(f"Loading query from file: {query_path}")
+    try:
+        with open(query_path, "r") as file:
+            content = "".join(file.readlines())
+            logger.debug(f"Successfully loaded query file ({len(content)} characters)")
+            return content
+    except FileNotFoundError:
+        logger.error(f"Query file not found: {query_path}")
+        raise
+    except Exception as e:
+        logger.error(f"Error reading query file {query_path}: {e}")
+        raise
 
 
 class DatabaseEngine(Enum):
@@ -48,11 +65,20 @@ class DatabaseBase:
         query: str,
         as_dataframe: bool = True,
     ):
-        with self.connect() as conn:
-            if as_dataframe:
-                return pd.read_sql_query(query, conn)
-            else:
-                return conn.execute(query)
+        logger.debug(f"Executing query: {query[:100]}...")
+        try:
+            with self.connect() as conn:
+                if as_dataframe:
+                    result = pd.read_sql_query(query, conn)
+                    logger.debug(f"Query executed successfully, returned {len(result)} rows")
+                    return result
+                else:
+                    result = conn.execute(query)
+                    logger.debug("Query executed successfully")
+                    return result
+        except Exception as e:
+            logger.error(f"Query execution failed: {e}")
+            raise
 
     def get_all_tables_schema(self, *args, **kwargs):
         raise NotImplementedError()
@@ -143,6 +169,65 @@ class PostgresDatabase(DatabaseBase):
         return ValueError(
             f"both table_schema: {table_schema}, and table_name {table_name} cannot be null"
         )
+
+    def get_table_references(self, table_name: str):
+        query = f"""WITH
+            fk_from AS (
+                SELECT
+                    'FROM {table_name} →' AS relation_direction,
+                    conname AS constraint_name,
+                    conrelid::regclass AS source_table,
+                    a.attname AS source_column,
+                    confrelid::regclass AS referenced_table,
+                    af.attname AS referenced_column,
+                    format('Table "%s"."%s" → Table "%s"."%s"',
+                        conrelid::regclass,
+                        a.attname,
+                        confrelid::regclass,
+                        af.attname) AS explanation
+                FROM
+                    pg_constraint c
+                    JOIN pg_class cl ON cl.oid = c.conrelid
+                    JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+                    JOIN pg_attribute af ON af.attnum = ANY(c.confkey) AND af.attrelid = c.confrelid
+                WHERE
+                    c.contype = 'f'
+                    AND c.conrelid::regclass::text = '{table_name}'
+            ),
+            -- Foreign keys to the actor table (other tables → actor)
+            fk_to AS (
+                SELECT
+                    'TO {table_name} ←' AS relation_direction,
+                    conname AS constraint_name,
+                    conrelid::regclass AS source_table,
+                    a.attname AS source_column,
+                    confrelid::regclass AS referenced_table,
+                    af.attname AS referenced_column,
+                    format('Table "%s"."%s" references → Table "%s"."%s"',
+                        conrelid::regclass,
+                        a.attname,
+                        confrelid::regclass,
+                        af.attname) AS explanation
+                FROM
+                    pg_constraint c
+                    JOIN pg_class cl ON cl.oid = c.conrelid
+                    JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+                    JOIN pg_attribute af ON af.attnum = ANY(c.confkey) AND af.attrelid = c.confrelid
+                WHERE
+                    c.contype = 'f'
+                    AND c.confrelid::regclass::text = '{table_name}'
+            )
+
+            -- Combine both
+            SELECT * FROM fk_from
+            UNION ALL
+            SELECT * FROM fk_to
+            ORDER BY relation_direction, source_table;
+            """
+        try:
+            return self.execute_query(query.format(table_name=table_name))
+        except Exception as e:
+            return None
 
 
 class OracleDatabase(DatabaseBase):
@@ -290,7 +375,7 @@ class ClickhouseDatabase(DatabaseBase):
         try:
             from sqlalchemy import create_engine
             from clickhouse_sqlalchemy import make_session
-        except ImportError  as e:
+        except ImportError as e:
             raise ModuleNotFoundError(
                 "To use Clickhouse, please install clickhouse-sqlalchemy and sqlalchemy by using 'pip install querygpt[clickhouse]'"
             )
@@ -400,26 +485,31 @@ class InternalDatabase(DuckDBDatabase):
 
     def __post_init__(self):
         # post init is to do checks on interal ddl scheam
+        logger.info("Initializing internal database schema")
         try:
             path = resolve_path_from_project(self.config.ddl_query_path)
             ddl_script = load_query_from_file(path)
             with self.connect() as conn:
                 conn.execute(ddl_script)
+            logger.info("Internal database schema initialized successfully")
         except Exception as e:
+            logger.error(f"Failed to initialize internal database schema: {e}")
             raise e
-        
+
     def save_trace(self, trace: Trace):
         """Save the trace into the database.
-        
+
         Args:
             trace (Trace): The trace to save.
-            
+
         Returns:
             trace_id (int): The id of the trace.
         """
+        logger.info(f"Saving trace {trace.id} to database")
         trace = trace.to_dict()
         try:
             with self.connect() as conn:
+                logger.debug("Inserting trace record")
                 trace_id = conn.execute(
                     "INSERT INTO trace (id, task, enhanced_task, start_time, end_time, duration_seconds, final_answer, system_prompt, total_steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                     (
@@ -431,10 +521,13 @@ class InternalDatabase(DuckDBDatabase):
                         trace.get("duration_seconds"),
                         trace.get("final_answer"),
                         trace.get("system_prompt"),
-                        trace.get("total_steps")
+                        trace.get("total_steps"),
                     ),
                 ).fetchone()
                 trace_id = trace_id[0]
+                logger.debug(f"Trace record inserted with ID: {trace_id}")
+                
+                logger.debug(f"Inserting {len(trace['steps'])} trace steps")
                 for step in trace["steps"]:
                     conn.execute(
                         "INSERT INTO tracestep (id, trace_id, step_number, step_type, start_time, end_time, duration_seconds, model_input, model_output, tool_calls, observations, error, action_output, plan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -452,13 +545,15 @@ class InternalDatabase(DuckDBDatabase):
                             step.get("observations"),
                             step.get("error"),
                             step.get("action_output"),
-                            step.get("plan")
+                            step.get("plan"),
                         ),
                     )
+            logger.info(f"Trace {trace_id} saved successfully with {len(trace['steps'])} steps")
             return trace_id
         except Exception as e:
+            logger.error(f"Failed to save trace: {e}")
             raise e
-        
+
     def save_documentation(self, documentation):
         documentation = documentation.model_dump()
         with self.connect() as conn:

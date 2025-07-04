@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel
 from smolagents import (
     CodeAgent,
@@ -18,7 +17,10 @@ from querygpt.core import (
     init_internal_database_from_config,
     chat_completion_from_config,
 )
+from querygpt.core.logging import get_logger
 import json
+
+logger = get_logger(__name__)
 
 config = init_config()
 
@@ -38,13 +40,42 @@ class TableListerTool(Tool):
     def forward(
         self,
     ):
+        logger.debug("Getting all tables from database")
         tables = source_db.list_all_tables()
-        return json.dumps(tables.to_dict(orient="records"))
+        result = json.dumps(tables.to_dict(orient="records"))
+        logger.debug(f"Retrieved {len(tables)} tables")
+        return result
+
+
+class TableReferencesTool(Tool):
+    name = "get_table_references"
+    description = """this tool allows you to get all references to a table in a database in the format of 
+        - relation_direction: Indicates FK direction (i.e: FROM actor → or TO actor ←).
+        - constraint_name: Name of the foreign key constraint.
+        - source_table: Table where the FK is defined.
+        - source_column: Column in the source table that holds the FK.
+        - referenced_table: Table being referenced.
+        - referenced_column: Column in the referenced table (usually PK).
+        - explanation: Human-readable summary of the FK relationship."""
+    inputs = {
+        "table_name": {
+            "type": "string",
+            "description": "table name that you want fetch all its references",
+        }
+    }
+    output_type = "string"
+
+    def forward(self, table_name: str):
+        logger.debug(f"Getting table references for: {table_name}")
+        references = source_db.get_table_references(table_name)
+        result = json.dumps(references.to_dict(orient="records"))
+        logger.debug(f"Retrieved {len(references)} references for table {table_name}")
+        return result
 
 
 class ColumnListerTool(Tool):
     name = "get_columns"
-    description = "this tool allows you to get all columns an in a database in a database either in the all columns or to a specifc table_name"
+    description = "this tool allows you to get all columns a table in a database either in the all columns or to a specific table_name, table_schema"
     inputs = {
         "table_schema": {
             "type": "string",
@@ -60,10 +91,14 @@ class ColumnListerTool(Tool):
     output_type = "string"
 
     def forward(self, table_schema: str = None, table_name: str = None):
+        logger.debug(f"Getting columns for schema: {table_schema}, table: {table_name}")
         try:
             tables = source_db.list_all_columns(table_schema, table_name)
-            return json.dumps(tables.to_dict(orient="records"))
+            result = json.dumps(tables.to_dict(orient="records"))
+            logger.debug(f"Retrieved {len(tables)} columns")
+            return result
         except Exception as e:
+            logger.error(f"Error getting columns: {e}")
             return json.dumps({"error": str(e)})
 
 
@@ -79,10 +114,14 @@ class TableSchemaTool(Tool):
     output_type = "string"
 
     def forward(self, table_name: str):
+        logger.debug(f"Getting table schema for: {table_name}")
         try:
             schema = source_db.get_table_schema(table_name)
-            return json.dumps(schema.to_dict(orient="records"))
+            result = json.dumps(schema.to_dict(orient="records"))
+            logger.debug(f"Retrieved schema for table {table_name}")
+            return result
         except Exception as e:
+            logger.error(f"Error getting table schema for {table_name}: {e}")
             return json.dumps({"error": str(e)})
 
 
@@ -136,13 +175,17 @@ class TableSampleTool(Tool):
     output_type = "string"
 
     def forward(self, table_schema: str, table_name: str):
+        logger.debug(f"Getting sample data for table: {table_schema}.{table_name}")
         try:
             samples = source_db.get_table_sample_data(table_schema, table_name)
             # quick-fix: to handle timestamp be json serilazble :(
             for col in samples.select_dtypes(include=["datetime"]).columns:
                 samples[col] = samples[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
-            return json.dumps(samples.to_dict(orient="records"))
+            result = json.dumps(samples.to_dict(orient="records"))
+            logger.debug(f"Retrieved {len(samples)} sample rows for table {table_schema}.{table_name}")
+            return result
         except Exception as e:
+            logger.error(f"Error getting sample data for {table_schema}.{table_name}: {e}")
             return json.dumps({"error": str(e)})
 
 
@@ -173,7 +216,7 @@ class InisghtGeneratorTool(Tool):
 
     def _generate_insight(self, query: str, sql_result):
         prompt = f"""
-        You are a data analyst. A user asked the following question:
+        You are a senior data analyst with expertise in business intelligence and data storytelling. A user asked the following question:
 
         "{query}"
 
@@ -181,7 +224,32 @@ class InisghtGeneratorTool(Tool):
 
         {sql_result}
 
-        Now, analyze the result and summarize the key insights clearly and concisely. Focus on trends, patterns, anomalies, or top contributors. Use plain English suitable for a business decision-maker. If applicable, suggest one actionable takeaway.
+        Based on the nature of the query and the results, provide an appropriate analysis in markdown format. Not all queries require deep analysis - some may need just a simple answer or summary.
+
+        For straightforward queries (e.g., looking up specific values, counting records, or simple aggregations), provide a concise response with appropriate headings that reflect the query's purpose.
+
+        For queries that benefit from deeper analysis (e.g., trends, patterns, comparisons, or business insights), structure your response with relevant headings that emerge from the data analysis.
+
+        Guidelines for your response:
+        1. Use markdown formatting for structure and readability
+        2. Create headings that reflect the actual content and insights
+        3. Include only sections that are relevant to the query and data
+        4. For simple queries, focus on direct answers and essential context
+        5. For complex analysis, include:
+           - A clear summary of findings
+           - Relevant data patterns and insights
+           - Business implications where applicable
+           - Actionable recommendations if valuable
+           - Important limitations or considerations
+
+        Remember:
+        - Structure should emerge from the data, not follow a rigid template
+        - Focus on clarity and relevance
+        - Use appropriate markdown formatting (headings, lists, tables, etc.)
+        - Keep the response as concise as possible while being complete
+        - Not every query needs a full analysis - match the depth to the query's needs
+        - Provide direct answers without introductory phrases like "I'll analyze" or "Let me help"
+        - Start with the most important information immediately
         """
         messages = [
             {
@@ -195,7 +263,7 @@ class InisghtGeneratorTool(Tool):
             messages=messages,
             config=config.llm,
         )
-        return {"insight": response.choices[0].message.content}
+        return response.choices[0].message.content
 
 
 class SqlExecutorTool(Tool):
@@ -210,14 +278,17 @@ class SqlExecutorTool(Tool):
     output_type = "string"
 
     def forward(self, sql: str):
+        logger.debug(f"Executing SQL: {sql[:100]}...")
         result, error = validate_and_run_sql(sql=sql, database=source_db)
         if not error:
             for col in result.select_dtypes(include=["datetime"]).columns:
                 result[col] = result[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
             result = result.to_dict(orient="records")
             self._final = result
+            logger.debug(f"SQL executed successfully, returned {len(result)} rows")
             return json.dumps(result)
         else:
+            logger.error(f"SQL execution failed: {error}")
             return json.dumps({"error": error})
 
 
@@ -291,9 +362,20 @@ class GenerateSqlTool(Tool):
     }
     output_type = "string"
 
-    def forward(self, query: str, context: List[dict], instructions: str | None = None, previous_sql: str | None = None):
+    def forward(
+        self,
+        query: str,
+        context: List[dict],
+        instructions: str | None = None,
+        previous_sql: str | None = None,
+    ):
         respone = generate_sql_from_context(
-            query=query, context=context, config=config.llm, database=source_db.engine, instructions=instructions, previous_sql=previous_sql
+            query=query,
+            context=context,
+            config=config.llm,
+            database=source_db.engine,
+            instructions=instructions,
+            previous_sql=previous_sql,
         )
         self._final = respone
         return respone["sql"]

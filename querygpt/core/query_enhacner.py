@@ -2,9 +2,13 @@ from pydantic import BaseModel
 from querygpt.config.config import Config
 import json
 from querygpt.core import chat_completion_from_config
+from querygpt.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def enhance_user_question(user_question: str, config: Config) -> str:
+    logger.info(f"Enhancing user question: {user_question[:100]}...")
 
     class EnhancedQuestion(BaseModel):
         original_question: str
@@ -62,12 +66,16 @@ def enhance_user_question(user_question: str, config: Config) -> str:
         {"role": "user", "content": prompt},
     ]
     try:
+        logger.debug("Calling chat completion for question enhancement")
         response = chat_completion_from_config(
             messages, config, response_format=EnhancedQuestion
         )
-        return EnhancedQuestion(**json.loads(response.choices[0].message.content))
+        enhanced = EnhancedQuestion(**json.loads(response.choices[0].message.content))
+        logger.info(f"Question enhanced successfully: {enhanced.enhanced_question[:100]}...")
+        return enhanced
     except Exception as e:
-        print(e) # need better logging
+        logger.error(f"Failed to enhance question: {e}")
+        logger.warning("Returning original question due to enhancement failure")
         return user_question
 
 
